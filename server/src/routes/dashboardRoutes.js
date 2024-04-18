@@ -1,9 +1,10 @@
-// Initiate express router server/src/routes/dashboardRoutes.js
+// src/routes/dashboardRoutes.js
 const express = require('express');
 const dashboardController = require('../controllers/dashboardController');
+const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-router.get('/', dashboardController.getDashboardData);
+router.get('/', authMiddleware, dashboardController.getDashboardData);
 
 module.exports = router;

@@ -1,4 +1,4 @@
-// server/src/controllers/dashboardController.js
+// src/controllers/dashboardController.js
 const mongodbService = require('../services/mongodbService');
 
 const getDashboardData = async (req, res) => {

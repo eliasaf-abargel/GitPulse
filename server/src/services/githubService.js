@@ -2,6 +2,15 @@
 const axios = require('axios');
 const config = require('../config/config');
 
+const getUserAnalytics = async () => {
+  // Implement the logic to fetch user analytics data from GitHub API
+  // and process the data as needed
+};
+
+module.exports = {
+  getUserAnalytics,
+};
+
 const getGitHubData = async (url, params = {}) => {
   try {
     const response = await axios.get(url, {

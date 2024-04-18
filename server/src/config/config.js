@@ -1,11 +1,10 @@
-// server/src/config/config.js
+// src/config/config.js
 const dotenv = require('dotenv');
 dotenv.config();
 
 module.exports = {
-  mongoURI: process.env.MONGODB_URI,
+  mongoURI: `mongodb+srv://${process.env.MONGODB_USERNAME}:${process.env.MONGODB_PASSWORD}@cluster01.9jdwrvy.mongodb.net/GitDash`,
   githubToken: process.env.GITHUB_TOKEN,
-  githubUsername: process.env.GITHUB_USERNAME,
-  port: process.env.PORT,
   organizationName: process.env.ORGANIZATION_NAME,
+  jwtSecret: process.env.JWT_SECRET,
 };

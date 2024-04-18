@@ -1,11 +1,57 @@
-// server/src/services/mongodbService.js
+const mongoose = require('mongoose');
 const Organization = require('../models/organization');
 const User = require('../models/user');
-const Repository = require('../models/repository');
 const Team = require('../models/team');
+const Project = require('../models/project');
+const Repository = require('../models/repository');
 const config = require('../config/config');
 
-exports.saveOrganization = async (orgData) => {
+const connectToMongoDB = async () => {
+  try {
+    await mongoose.connect(config.mongoURI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log('Connected to MongoDB');
+  } catch (error) {
+    console.error('Error connecting to MongoDB:', error);
+    process.exit(1);
+  }
+};
+
+const getOrganizations = async () => {
+  try {
+    return await Organization.find();
+  } catch (error) {
+    throw error;
+  }
+};
+
+const getUsers = async () => {
+  try {
+    return await User.find();
+  } catch (error) {
+    throw error;
+  }
+};
+
+const getRepositories = async () => {
+  try {
+    return await Repository.find();
+  } catch (error) {
+    throw error;
+  }
+};
+
+const getTeams = async () => {
+  try {
+    return await Team.find();
+  } catch (error) {
+    throw error;
+  }
+};
+
+const saveOrganization = async (orgData) => {
   const existingOrg = await Organization.findOne({ name: orgData.login });
   if (!existingOrg) {
     const newOrg = new Organization({
@@ -17,7 +63,7 @@ exports.saveOrganization = async (orgData) => {
   }
 };
 
-exports.saveUser = async (userData) => {
+const saveUser = async (userData) => {
   const existingUser = await User.findOne({ username: userData.login });
   if (!existingUser) {
     const newUser = new User({
@@ -31,20 +77,20 @@ exports.saveUser = async (userData) => {
   }
 };
 
-exports.saveRepository = async (repoData) => {
+const saveRepository = async (repoData) => {
   const existingRepo = await Repository.findOne({ name: repoData.name });
   if (!existingRepo) {
     const newRepo = new Repository({
       name: repoData.name,
       description: repoData.description,
-      html_url: repoData.html_url,
+      htmlUrl: repoData.html_url,
       organization: config.organizationName,
     });
     await newRepo.save();
   }
 };
 
-exports.saveTeam = async (teamData) => {
+const saveTeam = async (teamData) => {
   const existingTeam = await Team.findOne({ name: teamData.name });
   if (!existingTeam) {
     const newTeam = new Team({
@@ -56,18 +102,14 @@ exports.saveTeam = async (teamData) => {
   }
 };
 
-exports.getOrganizations = async () => {
-  return await Organization.find();
-};
-
-exports.getUsers = async () => {
-  return await User.find();
-};
-
-exports.getRepositories = async () => {
-  return await Repository.find();
-};
-
-exports.getTeams = async () => {
-  return await Team.find();
+module.exports = {
+  connectToMongoDB,
+  getOrganizations,
+  getUsers,
+  getRepositories,
+  getTeams,
+  saveOrganization,
+  saveUser,
+  saveRepository,
+  saveTeam,
 };

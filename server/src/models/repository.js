@@ -1,4 +1,3 @@
-// server/src/models/repository.js
 const mongoose = require('mongoose');
 
 const repositorySchema = new mongoose.Schema({

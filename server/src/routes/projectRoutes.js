@@ -1,9 +1,11 @@
-// server/src/routes/projectRoutes.js
+// src/routes/projectRoutes.js
 const express = require('express');
 const router = express.Router();
-const projectController = require('~/controllers/projectController');
+const projectController = require('../controllers/projectController');
 
 router.get('/', projectController.getProjects);
-// Add more routes as needed
+router.post('/', projectController.createProject);
+router.put('/:id', projectController.updateProject);
+router.delete('/:id', projectController.deleteProject);
 
 module.exports = router;
