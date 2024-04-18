@@ -39,6 +39,7 @@ const saveOrganization = async (orgData) => {
     }
   } catch (error) {
     console.error('Error saving organization data:', error);
+    throw error; // Rethrow the error for better error handling
   }
 };
 
@@ -65,6 +66,7 @@ const saveUser = async (userData) => {
     }
   } catch (error) {
     console.error('Error saving user data:', error);
+    throw error; // Rethrow the error for better error handling
   }
 };
 
@@ -88,6 +90,7 @@ const saveRepository = async (repoData) => {
     }
   } catch (error) {
     console.error('Error saving repository data:', error);
+    throw error; // Rethrow the error for better error handling
   }
 };
 
@@ -109,6 +112,7 @@ const saveTeam = async (teamData) => {
     }
   } catch (error) {
     console.error('Error saving team data:', error);
+    throw error; // Rethrow the error for better error handling
   }
 };
 
@@ -116,7 +120,8 @@ const getOrganizations = async () => {
   try {
     return await Organization.find();
   } catch (error) {
-    throw error;
+    console.error('Error fetching organizations:', error);
+    throw error; // Rethrow the error for better error handling
   }
 };
 
@@ -124,7 +129,8 @@ const getUsers = async () => {
   try {
     return await User.find();
   } catch (error) {
-    throw error;
+    console.error('Error fetching users:', error);
+    throw error; // Rethrow the error for better error handling
   }
 };
 
@@ -132,7 +138,8 @@ const getRepositories = async () => {
   try {
     return await Repository.find();
   } catch (error) {
-    throw error;
+    console.error('Error fetching repositories:', error);
+    throw error; // Rethrow the error for better error handling
   }
 };
 
@@ -140,7 +147,58 @@ const getTeams = async () => {
   try {
     return await Team.find();
   } catch (error) {
-    throw error;
+    console.error('Error fetching teams:', error);
+    throw error; // Rethrow the error for better error handling
+  }
+};
+
+const getUsersInTeam = async (teamName) => {
+  try {
+    const team = await Team.findOne({ name: teamName });
+    if (!team) {
+      console.error(`Team "${teamName}" not found`);
+      throw new Error(`Team "${teamName}" not found`);
+    }
+
+    const members = await User.find({ _id: { $in: team.members } });
+    return members;
+  } catch (error) {
+    console.error(`Error fetching users in team "${teamName}":`, error);
+    throw error; // Rethrow the error for better error handling
+  }
+};
+
+const getRepositoriesInTeam = async (teamName) => {
+  try {
+    const team = await Team.findOne({ name: teamName });
+    if (!team) {
+      console.error(`Team "${teamName}" not found`);
+      throw new Error(`Team "${teamName}" not found`);
+    }
+
+    const repositories = await Repository.find({ _id: { $in: team.repositories } });
+    return repositories;
+  } catch (error) {
+    console.error(`Error fetching repositories in team "${teamName}":`, error);
+    throw error; // Rethrow the error for better error handling
+  }
+};
+
+const getUserByUsername = async (username) => {
+  try {
+    return await User.findOne({ username });
+  } catch (error) {
+    console.error(`Error fetching user by username "${username}":`, error);
+    throw error; // Rethrow the error for better error handling
+  }
+};
+
+const getUserByEmail = async (email) => {
+  try {
+    return await User.findOne({ email });
+  } catch (error) {
+    console.error(`Error fetching user by email "${email}":`, error);
+    throw error; // Rethrow the error for better error handling
   }
 };
 
@@ -154,4 +212,8 @@ module.exports = {
   getUsers,
   getRepositories,
   getTeams,
+  getUsersInTeam,
+  getRepositoriesInTeam,
+  getUserByUsername,
+  getUserByEmail,
 };

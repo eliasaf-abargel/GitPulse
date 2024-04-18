@@ -48,6 +48,10 @@ const updateGitHubData = async () => {
   }
 };
 
+// Trigger the updateGitHubData function immediately
+updateGitHubData();
+console.log('GitHub data updated immediately');
+
 // Schedule the cron job to run every 5 minutes
 cron.schedule('*/5 * * * *', async () => {
   try {
@@ -58,7 +62,3 @@ cron.schedule('*/5 * * * *', async () => {
 });
 
 console.log('GitHub data will be updated every 5 minutes');
-
-// Trigger the updateGitHubData function immediately
-updateGitHubData();
-console.log('GitHub data updated immediately');

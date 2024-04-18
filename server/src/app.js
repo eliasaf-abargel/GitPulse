@@ -8,6 +8,7 @@ const authRoutes = require('./routes/authRoutes');
 const githubRoutes = require('./routes/githubRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 const userRoutes = require('./routes/userRoutes');
+const dataRoutes = require('./routes/dataRoutes');
 const authMiddleware = require('./middleware/authMiddleware');
 
 dotenv.config();
@@ -22,6 +23,7 @@ app.use('/api/auth', authRoutes.router);
 app.use('/api/github', githubRoutes);
 app.use('/api/projects', authMiddleware, projectRoutes);
 app.use('/api/users', authMiddleware, userRoutes);
+app.use('/api/data', dataRoutes);
 
 // API Routes
 app.use('/api/dashboard', authMiddleware, dashboardRoutes);
