@@ -1,3 +1,4 @@
+// src/cron/githubCron.js
 const cron = require('node-cron');
 const githubController = require('../controllers/githubController');
 const mongodbService = require('../services/mongodbService');
@@ -47,10 +48,17 @@ const updateGitHubData = async () => {
   }
 };
 
+// Schedule the cron job to run every 5 minutes
+cron.schedule('*/5 * * * *', async () => {
+  try {
+    await updateGitHubData();
+  } catch (error) {
+    console.error('Error in cron job:', error);
+  }
+});
+
+console.log('GitHub data will be updated every 5 minutes');
+
 // Trigger the updateGitHubData function immediately
 updateGitHubData();
 console.log('GitHub data updated immediately');
-
-// Schedule the cron job to run every 5 minutes
-cron.schedule('*/5 * * * *', updateGitHubData);
-console.log('GitHub data updated every 5 minutes');
