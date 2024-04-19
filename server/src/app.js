@@ -1,4 +1,4 @@
-// src/app.js
+// src/App.js
 const express = require('express');
 const dotenv = require('dotenv');
 const morgan = require('morgan');

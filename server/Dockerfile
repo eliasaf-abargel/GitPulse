@@ -25,4 +25,4 @@ COPY .env ./dist/.env
 EXPOSE 5001
 
 # Start the application
-CMD ["node", "dist/app.js"]
+CMD ["node", "dist/App.js"]
