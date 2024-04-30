@@ -30,13 +30,31 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(routes);
 
-// Handle Slack events
-app.use('/slack/events', async (req, res) => {
+// Handle Slack events and actions
+slackApp.use(async ({ event, context, ack, respond }) => {
   try {
-    await slackApp.requestListener()(req, res);
+    // Acknowledge the event
+    await ack();
+
+    // Process the event
+    // Add your event handling logic here
+    logger.info('Received event:', event);
+
+    // Respond to the event (if needed)
+    // await respond('Event received');
   } catch (error) {
     logger.error('Error handling Slack event:', error);
-    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Handle the challenge request for event subscription verification
+app.post('/slack/events', async (req, res) => {
+  const { challenge } = req.body;
+  if (challenge) {
+    // Respond with the challenge value for verification
+    res.send(challenge);
+  } else {
+    res.status(400).send('Bad Request');
   }
 });
 
@@ -48,5 +66,5 @@ app.listen(4000, () => {
 // Start the Slack app
 (async () => {
   await slackApp.start(process.env.PORT || 4000);
-  logger.info(`Slack app is running on port ${slackApp.receiver.port}`);
+  logger.info(`Slack app is running on port ${process.env.PORT || 4000}`);
 })();
