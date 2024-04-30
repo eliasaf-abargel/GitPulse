@@ -2,11 +2,11 @@
 FROM node:14
 
 # Install GELF logging driver dependencies
+RUN echo "deb http://deb.debian.org/debian buster-backports main" >> /etc/apt/sources.list
 RUN apt-get update && apt-get install -y \
     libglib2.0-dev \
     libpcre3-dev \
-    zlib1g-dev \
-    libsystemd-dev
+    zlib1g-dev
 
 # Set the working directory
 WORKDIR /app
