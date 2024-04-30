@@ -10,5 +10,5 @@ services:
     logging:
       driver: "gelf"
       options:
-        gelf-address: "udp://192.168.203.34:5044"
+        gelf-address: "ip:port"
         tag: "gitpulse"
