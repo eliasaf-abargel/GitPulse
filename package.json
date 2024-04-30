@@ -1,0 +1,21 @@
+{
+  "name": "gitpulse",
+  "version": "1.0.0",
+  "description": "",
+  "main": "routes.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "build": "echo \"No build script defined\" && exit 0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@octokit/rest": "^20.1.0",
+    "@slack/bolt": "^3.18.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "winston": "^3.13.0"
+  }
+}
