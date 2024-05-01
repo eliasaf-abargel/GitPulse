@@ -1,9 +1,8 @@
 # GitPulse
 
 <p align="center">
-  <img src="[GitPulse](https://github.com/eliasaf-abargel/GitPulse/blob/main/GitPulse%20.jpg)" alt="GitPulse Logo" width="200" height="200">
+  <img src="https://github.com/eliasaf-abargel/GitPulse/blob/main/GitPulse%20.jpg?raw=true" alt="GitPulse Logo" width="200" height="200">
 </p>
-
 
 # GitHub-Slack Integration App
 
