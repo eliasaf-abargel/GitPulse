@@ -1,4 +1,4 @@
-#GitPulse
+# GitPulse
 
 <p align="center">
   <img src="[GitPulse](https://github.com/eliasaf-abargel/GitPulse.git/blob/main/GitPulse.jpg?raw=true)" alt="GitPulse Logo" width="200" height="200">
