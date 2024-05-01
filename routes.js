@@ -3,6 +3,7 @@ const router = express.Router();
 
 const githubController = require('./controllers/githubController');
 const slackController = require('./controllers/slackController');
+const { errorHandler } = require('./utils/errorHandler');
 
 router.get('/slack/commands/repo-list', githubController.getOrganizationRepositories);
 router.get('/slack/commands/repo-details/:repoName', githubController.getRepositoryDetails);
@@ -15,5 +16,7 @@ router.get('/slack/commands/org-details', githubController.getOrganizationDetail
 router.post('/slack/commands', (req, res) => {
   slackController.handleSlackCommand(req, res);
 });
+
+router.use(errorHandler);
 
 module.exports = router;

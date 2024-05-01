@@ -1,0 +1,40 @@
+slack:
+  token: ${SLACK_BOT_TOKEN_ENCRYPTED}
+  signing_secret: ${SLACK_SIGNING_SECRET_ENCRYPTED}
+  channel: ${SLACK_CHANNEL}
+  commands:
+    - command: /repo-list
+      description: List organization repositories
+      response:
+        type: text
+        text: "Fetching repository list..."
+    - command: /repo-details
+      description: Get repository details
+      response:
+        type: text
+        text: "Fetching repository details..."
+    - command: /user-list
+      description: List organization users
+      response:
+        type: text
+        text: "Fetching user list..."
+    - command: /user-details
+      description: Get user details
+      response:
+        type: text
+        text: "Fetching user details..."
+    - command: /team-list
+      description: List organization teams
+      response:
+        type: text
+        text: "Fetching team list..."
+    - command: /team-details
+      description: Get team details
+      response:
+        type: text
+        text: "Fetching team details..."
+    - command: /org-details
+      description: Get organization details
+      response:
+        type: text
+        text: "Fetching organization details..."

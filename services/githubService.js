@@ -1,6 +1,7 @@
 const axios = require('axios');
 const config = require('../config/config');
 const logger = require('../utils/logger');
+const CustomError = require('../utils/errorHandler');
 
 const githubApi = axios.create({
   baseURL: 'https://api.github.com',
@@ -15,11 +16,52 @@ const githubApi = axios.create({
  */
 async function getOrganizationRepositories() {
   try {
-    const response = await githubApi.get(`/orgs/${config.organizationName}/repos`);
-    return response.data;
+    let page = 1;
+    let allRepositories = [];
+
+    while (true) {
+      const response = await githubApi.get(`/orgs/${config.organizationName}/repos`, {
+        params: {
+          page: page,
+          per_page: 200,
+        },
+      });
+
+      allRepositories = allRepositories.concat(
+        response.data.map((repo) => ({
+          name: repo.name,
+          url: repo.html_url,
+          private: repo.private,
+          organization: config.organizationName,
+        }))
+      );
+
+      if (response.data.length < 100) {
+        break;
+      }
+
+      page++;
+    }
+
+    return allRepositories;
   } catch (error) {
     logger.error('Error fetching organization repositories:', error);
-    throw error;
+    throw new CustomError('Failed to fetch organization repositories', 500);
+  }
+}
+
+/**
+ * Fetches the repository owners (contributors) for a specific repository.
+ * @param {string} repoName - The name of the repository.
+ * @returns {Promise<Array>} - An array of owner usernames.
+ */
+async function getRepositoryOwners(repoName) {
+  try {
+    const response = await githubApi.get(`/repos/${config.organizationName}/${repoName}/contributors`);
+    return response.data.map((contributor) => contributor.login);
+  } catch (error) {
+    logger.error(`Error fetching owners for repository: ${repoName}`, error);
+    throw new CustomError(`Failed to fetch owners for repository: ${repoName}`, 500);
   }
 }
 
@@ -46,7 +88,7 @@ async function getRepositoryDetails(repoName) {
     };
   } catch (error) {
     logger.error(`Error fetching details for repository: ${repoName}`, error);
-    throw error;
+    throw new CustomError(`Failed to fetch details for repository: ${repoName}`, 500);
   }
 }
 
@@ -61,7 +103,7 @@ async function getRepositoryContributors(repoName) {
     return response.data.map((contributor) => contributor.login);
   } catch (error) {
     logger.error(`Error fetching contributors for repository: ${repoName}`, error);
-    throw error;
+    throw new CustomError(`Failed to fetch contributors for repository: ${repoName}`, 500);
   }
 }
 
@@ -76,7 +118,7 @@ async function getRepositoryLanguages(repoName) {
     return Object.keys(response.data);
   } catch (error) {
     logger.error(`Error fetching languages for repository: ${repoName}`, error);
-    throw error;
+    throw new CustomError(`Failed to fetch languages for repository: ${repoName}`, 500);
   }
 }
 
@@ -93,7 +135,7 @@ async function getOrganizationMembers() {
     }));
   } catch (error) {
     logger.error('Error fetching organization members:', error);
-    throw error;
+    throw new CustomError('Failed to fetch organization members', 500);
   }
 }
 
@@ -124,7 +166,7 @@ async function getUserDetails(username) {
     };
   } catch (error) {
     logger.error(`Error fetching details for user: ${username}`, error);
-    throw error;
+    throw new CustomError(`Failed to fetch details for user: ${username}`, 500);
   }
 }
 
@@ -139,7 +181,7 @@ async function getUserRepositories(username) {
     return response.data.map((repo) => repo.name);
   } catch (error) {
     logger.error(`Error fetching repositories for user: ${username}`, error);
-    throw error;
+    throw new CustomError(`Failed to fetch repositories for user: ${username}`, 500);
   }
 }
 
@@ -154,7 +196,7 @@ async function getUserOrganizations(username) {
     return response.data.map((org) => org.login);
   } catch (error) {
     logger.error(`Error fetching organizations for user: ${username}`, error);
-    throw error;
+    throw new CustomError(`Failed to fetch organizations for user: ${username}`, 500);
   }
 }
 
@@ -176,7 +218,7 @@ async function getOrganizationTeams() {
     }));
   } catch (error) {
     logger.error('Error fetching organization teams:', error);
-    throw error;
+    throw new CustomError('Failed to fetch organization teams', 500);
   }
 }
 
@@ -191,7 +233,7 @@ async function getTeamDetails(teamName) {
     const team = teams.find((t) => t.name === teamName);
     if (!team) {
       logger.warn(`Team "${teamName}" not found`);
-      return null;
+      throw new CustomError(`Team "${teamName}" not found`, 404);
     }
     const members = await getTeamMembers(team.id);
     const repos = await getTeamRepositories(team.id);
@@ -213,20 +255,23 @@ async function getTeamDetails(teamName) {
 /**
  * Fetches the members of a specific team.
  * @param {number} teamId - The ID of the team.
- * @returns {Promise<Array>} - An array of member usernames.
+ * @returns {Promise<Array>} - An array of member objects.
  */
 async function getTeamMembers(teamId) {
   try {
     const response = await githubApi.get(`/teams/${teamId}/members`);
-    return response.data.map((member) => member.login);
+    return response.data.map((member) => ({
+      login: member.login,
+      url: member.html_url,
+    }));
   } catch (error) {
     logger.error(`Error fetching members for team: ${teamId}`, error);
-    throw error;
+    throw new CustomError(`Failed to fetch members for team: ${teamId}`, 500);
   }
 }
 
 /**
- * Fetches the repositories associated with a specific team.
+ * Fetches the repositories accessible to a specific team.
  * @param {number} teamId - The ID of the team.
  * @returns {Promise<Array>} - An array of repository names.
  */
@@ -236,7 +281,7 @@ async function getTeamRepositories(teamId) {
     return response.data.map((repo) => repo.name);
   } catch (error) {
     logger.error(`Error fetching repositories for team: ${teamId}`, error);
-    throw error;
+    throw new CustomError(`Failed to fetch repositories for team: ${teamId}`, 500);
   }
 }
 
@@ -247,25 +292,10 @@ async function getTeamRepositories(teamId) {
 async function getOrganizationDetails() {
   try {
     const response = await githubApi.get(`/orgs/${config.organizationName}`);
-    const orgDetails = response.data;
-    const members = await getOrganizationMembers();
-    const teams = await getOrganizationTeams();
-    const repos = await getOrganizationRepositories();
-    return {
-      login: orgDetails.login,
-      name: orgDetails.name,
-      description: orgDetails.description,
-      blog: orgDetails.blog,
-      location: orgDetails.location,
-      email: orgDetails.email,
-      publicRepos: orgDetails.public_repos,
-      members,
-      teams,
-      repositories: repos,
-    };
+    return response.data;
   } catch (error) {
     logger.error('Error fetching organization details:', error);
-    throw error;
+    throw new CustomError('Failed to fetch organization details', 500);
   }
 }
 
@@ -274,6 +304,7 @@ module.exports = {
   getRepositoryDetails,
   getRepositoryContributors,
   getRepositoryLanguages,
+  getRepositoryOwners,
   getOrganizationMembers,
   getUserDetails,
   getUserRepositories,

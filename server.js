@@ -1,5 +1,3 @@
-// server.js
-
 require('dotenv').config();
 
 const express = require('express');
@@ -7,17 +5,24 @@ const bodyParser = require('body-parser');
 const { App } = require('@slack/bolt');
 const winston = require('winston');
 const routes = require('./routes');
+const config = require('./config/config');
+const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
 
 const slackApp = new App({
-  token: process.env.SLACK_BOT_TOKEN,
-  signingSecret: process.env.SLACK_SIGNING_SECRET,
+  token: config.slackBotToken,
+  signingSecret: config.slackSigningSecret,
 });
 
 const logger = winston.createLogger({
   level: 'info',
-  format: winston.format.json(),
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.printf(({ level, message, timestamp }) => {
+      return `[${timestamp}] ${level}: ${message}`;
+    })
+  ),
   defaultMeta: { service: 'github-slack-app' },
   transports: [
     new winston.transports.Console(),
@@ -57,6 +62,9 @@ app.post('/slack/events', async (req, res) => {
     res.status(400).send('Bad Request');
   }
 });
+
+// Handle errors
+app.use(errorHandler);
 
 // Start the Express server
 app.listen(4000, () => {
