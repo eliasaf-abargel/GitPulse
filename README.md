@@ -1,9 +1,7 @@
 #GitPulse
 
-https://github.com/eliasaf-abargel/GitPulse.git/blob/main/GitPulse.jpg?raw=true
-
 <p align="center">
-  <img src="GitPulse" alt="GitPulse Logo" width="200" height="200">
+  <img src="[GitPulse](https://github.com/eliasaf-abargel/GitPulse.git/blob/main/GitPulse.jpg?raw=true)" alt="GitPulse Logo" width="200" height="200">
 </p>
 
 
