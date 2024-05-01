@@ -1,9 +1,9 @@
 #GitPulse
 
-https://github.com/your-username/your-repository-name/blob/main/path-to-your-image.png?raw=true
+https://github.com/eliasaf-abargel/GitPulse.git/blob/main/GitPulse.jpg?raw=true
 
 <p align="center">
-  <img src="URL_OF_YOUR_IMAGE" alt="GitPulse Logo" width="200" height="200">
+  <img src="GitPulse" alt="GitPulse Logo" width="200" height="200">
 </p>
 
 
