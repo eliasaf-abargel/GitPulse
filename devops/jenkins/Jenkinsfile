@@ -1,0 +1,97 @@
+pipeline {
+    agent { label "${params.SERVER}" }
+    parameters {
+        string(name: 'BRANCH', defaultValue: 'main', description: 'Branch to build')
+        string(name: 'DEPTH', defaultValue: '1', description: 'Number of commits to fetch')
+        choice(name: 'SERVER', choices: ['server1', 'server2'], description: 'Server to deploy to')
+    }
+    environment {
+        DOCKER_COMPOSE_FILE = "devops/docker/docker-compose.yaml"
+        PROJECT_DIR = "."
+        VAULT_ADDR = "https://your-vault-server"
+        VAULT_TOKEN = credentials('vault-token')
+        AWS_REGION = "your-aws-region"
+        ECR_REGISTRY = "your-aws-ecr-url"
+        IMAGE_NAME = "your-image-name"
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    def checkoutScript = load 'devops/jenkins/pipeline/checkout.groovy'
+                    checkoutScript.checkout(params.BRANCH, params.DEPTH)
+                }
+            }
+        }
+        stage('Clean') {
+            steps {
+                script {
+                    def cleanScript = load 'devops/jenkins/pipeline/clean.groovy'
+                    cleanScript.clean()
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                script {
+                    // Fetch environment variables from Vault
+                    withCredentials([string(credentialsId: 'vault-token', variable: 'VAULT_TOKEN')]) {
+                        def envVars = sh(script: """
+                            curl -s --header "X-Vault-Token: ${VAULT_TOKEN}" --request GET ${VAULT_ADDR}/v1/secret/data/devops/jenkins | jq -r '.data.data | to_entries | .[] | "\(.key)=\(.value)"'
+                        """, returnStdout: true).trim()
+
+                        envVars.split('\n').each { envVar ->
+                            def (key, value) = envVar.tokenize('=')
+                            env."${key}" = value
+                        }
+                    }
+
+                    writeFile file: 'devops/docker/.env', text: envVars
+                    def buildScript = load 'devops/jenkins/pipeline/build.groovy'
+                    buildScript.build()
+                }
+            }
+        }
+        stage('Test') {
+            steps {
+                script {
+                    def testScript = load 'devops/jenkins/pipeline/test.groovy'
+                    testScript.test()
+                }
+            }
+        }
+        stage('Push Image') {
+            steps {
+                script {
+                    docker.withRegistry("https://${ECR_REGISTRY}", "ecr:${AWS_REGION}:aws-credentials") {
+                        def customImage = docker.build("${IMAGE_NAME}")
+                        customImage.push("${env.BUILD_NUMBER}")
+                    }
+                }
+            }
+        }
+        stage('Deploy') {
+            steps {
+                script {
+                    def deployScript = load 'devops/jenkins/pipeline/deploy.groovy'
+                    deployScript.deploy()
+                }
+            }
+        }
+    }
+    post {
+        always {
+            echo 'Cleaning up...'
+            script {
+                def cleanupScript = load 'devops/jenkins/pipeline/cleanup.groovy'
+                cleanupScript.cleanup()
+            }
+        }
+        success {
+            slackSend(color: 'good', message: "Deployment succeeded for build ${env.BUILD_NUMBER}")
+        }
+        failure {
+            slackSend(color: 'danger', message: "Deployment failed for build ${env.BUILD_NUMBER}")
+        }
+    }
+}

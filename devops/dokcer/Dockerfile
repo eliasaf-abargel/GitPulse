@@ -26,7 +26,8 @@ RUN npm run build
 EXPOSE 4000
 
 # Define the healthcheck
-HEALTHCHECK CMD curl --fail http://localhost:4000/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl --fail http://localhost:4000/health || exit 1
 
 # Start the application
 CMD ["npm", "start"]
