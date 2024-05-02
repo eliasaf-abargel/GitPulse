@@ -26,8 +26,8 @@ const logger = winston.createLogger({
   defaultMeta: { service: 'github-slack-app' },
   transports: [
     new winston.transports.Console(),
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'combined.log' }),
+    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'logs/combined.log' }),
   ],
 });
 
@@ -36,17 +36,15 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(routes);
 
 // Handle Slack events and actions
-slackApp.use(async ({ event, context, ack, respond }) => {
+slackApp.event('app_mention', async ({ event, context, say }) => {
   try {
-    // Acknowledge the event
-    await ack();
+    logger.info('Received event:', event);
 
     // Process the event
     // Add your event handling logic here
-    logger.info('Received event:', event);
 
     // Respond to the event (if needed)
-    // await respond('Event received');
+    // await say('Event received');
   } catch (error) {
     logger.error('Error handling Slack event:', error);
   }
@@ -63,7 +61,7 @@ app.post('/slack/events', async (req, res) => {
   }
 });
 
-// Handle errors
+// Error handling middleware
 app.use(errorHandler);
 
 // Start the Express server
@@ -76,3 +74,14 @@ app.listen(4000, () => {
   await slackApp.start(process.env.PORT || 4000);
   logger.info(`Slack app is running on port ${process.env.PORT || 4000}`);
 })();
+
+// Handle unhandled rejections and uncaught exceptions
+process.on('unhandledRejection', (error) => {
+  logger.error('Unhandled Rejection:', error);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error);
+  process.exit(1);
+});

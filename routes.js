@@ -3,6 +3,7 @@ const router = express.Router();
 
 const githubController = require('./controllers/githubController');
 const slackController = require('./controllers/slackController');
+const chatgptController = require('./controllers/chatgptController');
 const { errorHandler } = require('./utils/errorHandler');
 
 router.get('/slack/commands/repo-list', githubController.getOrganizationRepositories);
@@ -12,6 +13,9 @@ router.get('/slack/commands/user-details/:username', githubController.getUserDet
 router.get('/slack/commands/team-list', githubController.getOrganizationTeams);
 router.get('/slack/commands/team-details/:teamName', githubController.getTeamDetails);
 router.get('/slack/commands/org-details', githubController.getOrganizationDetails);
+router.get('/slack/commands/last-commit/:repoName', githubController.getLastCommitDetails);
+
+router.post('/slack/commands/ask', chatgptController.handleAskCommand);
 
 router.post('/slack/commands', (req, res) => {
   slackController.handleSlackCommand(req, res);

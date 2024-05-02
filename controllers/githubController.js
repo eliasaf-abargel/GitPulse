@@ -35,6 +35,24 @@ async function getRepositoryDetails(req, res) {
 }
 
 /**
+ * Fetches the last commit details for a specific repository and returns the data.
+ * @param {Object} req - The Express request object.
+ * @param {Object} res - The Express response object.
+ */
+async function getLastCommitDetails(req, res) {
+  try {
+    const { repoName } = req.params;
+    const lastCommitDetails = await githubService.getLastCommitDetails(repoName);
+    logger.info(`Successfully fetched last commit details for repository: ${repoName}`);
+    res.status(200).json(lastCommitDetails);
+  } catch (error) {
+    logger.error(`Error fetching last commit details for repository: ${req.params.repoName}`, error);
+    res.status(500).json({ error: 'Failed to fetch last commit details' });
+  }
+}
+
+
+/**
  * Fetches the organization members and returns the data.
  * @param {Object} req - The Express request object.
  * @param {Object} res - The Express response object.
@@ -124,6 +142,7 @@ async function getOrganizationDetails(req, res) {
 module.exports = {
   getOrganizationRepositories,
   getRepositoryDetails,
+  getLastCommitDetails,
   getOrganizationMembers,
   getUserDetails,
   getOrganizationTeams,

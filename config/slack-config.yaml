@@ -38,3 +38,13 @@ slack:
       response:
         type: text
         text: "Fetching organization details..."
+    - command: /last-commit
+      description: Get the last commit details for a repository
+      response:
+        type: text
+        text: "Fetching last commit details..."
+    - command: /ask
+      description: Ask a question and get an answer from ChatGPT
+      response:
+        type: text
+        text: "Asking ChatGPT..."

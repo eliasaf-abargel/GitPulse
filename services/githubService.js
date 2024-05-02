@@ -66,6 +66,27 @@ async function getRepositoryOwners(repoName) {
 }
 
 /**
+ * Fetches the last commit details for a specific repository.
+ * @param {string} repoName - The name of the repository.
+ * @returns {Promise<Object>} - The last commit details.
+ */
+async function getLastCommitDetails(repoName) {
+  try {
+    const response = await githubApi.get(`/repos/${config.organizationName}/${repoName}/commits/HEAD`);
+    const lastCommit = response.data;
+    return {
+      sha: lastCommit.sha,
+      author: lastCommit.commit.author.name,
+      message: lastCommit.commit.message,
+      date: lastCommit.commit.author.date,
+    };
+  } catch (error) {
+    logger.error(`Error fetching last commit details for repository: ${repoName}`, error);
+    throw new CustomError(`Failed to fetch last commit details for repository: ${repoName}`, 500);
+  }
+}
+
+/**
  * Fetches the details of a specific repository.
  * @param {string} repoName - The name of the repository.
  * @returns {Promise<Object>} - The repository details.
@@ -76,6 +97,7 @@ async function getRepositoryDetails(repoName) {
     const repoDetails = response.data;
     const contributors = await getRepositoryContributors(repoName);
     const languages = await getRepositoryLanguages(repoName);
+    const teams = await getRepositoryTeams(repoName);
     return {
       name: repoDetails.name,
       description: repoDetails.description,
@@ -85,12 +107,29 @@ async function getRepositoryDetails(repoName) {
       updatedAt: repoDetails.updated_at,
       contributors,
       languages,
+      teams,
     };
   } catch (error) {
     logger.error(`Error fetching details for repository: ${repoName}`, error);
     throw new CustomError(`Failed to fetch details for repository: ${repoName}`, 500);
   }
 }
+
+/**
+ * Fetches the teams associated with a specific repository.
+ * @param {string} repoName - The name of the repository.
+ * @returns {Promise<Array>} - An array of team names.
+ */
+async function getRepositoryTeams(repoName) {
+  try {
+    const response = await githubApi.get(`/repos/${config.organizationName}/${repoName}/teams`);
+    return response.data.map((team) => team.name);
+  } catch (error) {
+    logger.error(`Error fetching teams for repository: ${repoName}`, error);
+    throw new CustomError(`Failed to fetch teams for repository: ${repoName}`, 500);
+  }
+}
+
 
 /**
  * Fetches the contributors for a specific repository.
@@ -302,6 +341,8 @@ async function getOrganizationDetails() {
 module.exports = {
   getOrganizationRepositories,
   getRepositoryDetails,
+  getLastCommitDetails,
+  getRepositoryTeams,
   getRepositoryContributors,
   getRepositoryLanguages,
   getRepositoryOwners,

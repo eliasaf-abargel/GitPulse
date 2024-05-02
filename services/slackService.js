@@ -1,5 +1,6 @@
 const axios = require('axios');
 const githubService = require('./githubService');
+const chatgptService = require('./chatgptService');
 const logger = require('../utils/logger');
 const config = require('../config/config');
 const { handleError } = require('../utils/errorHandler');
@@ -7,19 +8,27 @@ const { handleError } = require('../utils/errorHandler');
 /**
  * Send a response to the Slack app.
  * @param {string} responseUrl - The Slack response URL.
- * @param {string} response - The response text to send.
+ * @param {string | object} response - The response to send, can be a string or an object.
+ * @param {string} [responseType] - The type of response (e.g., 'ephemeral', 'in_channel').
  * @returns {Promise<void>}
  */
-async function sendResponse(responseUrl, response) {
+async function sendResponse(responseUrl, response, responseType = 'in_channel') {
   try {
-    if (response !== '') {
-      logger.info(`Sending response to Slack: ${response}`);
-      logger.info(`Response URL: ${responseUrl}`);
-      await axios.post(responseUrl, { text: response });
-      logger.info(`Response sent successfully`);
+    let payload;
+    if (typeof response === 'string') {
+      payload = {
+        response_type: responseType,
+        text: response,
+      };
     } else {
-      logger.info('Skipping empty response');
+      payload = {
+        response_type: responseType,
+        ...response,
+      };
     }
+
+    await axios.post(responseUrl, payload);
+    logger.info(`Response sent successfully`);
   } catch (error) {
     logger.error('Error sending Slack response:', error);
     handleError(error, 'Error sending Slack response');
@@ -82,7 +91,8 @@ async function getRepoDetails(repoName) {
       `Created At: ${repoDetails.createdAt}\n` +
       `Updated At: ${repoDetails.updatedAt}\n` +
       `Contributors: ${repoDetails.contributors.join(', ')}\n` +
-      `Languages: ${repoDetails.languages.join(', ')}`;
+      `Languages: ${repoDetails.languages.join(', ')}\n` +
+      `Teams: ${repoDetails.teams.join(', ')}`;
     logger.info(`Fetched details for repository: ${repoName}`);
     return response;
   } catch (error) {
@@ -209,20 +219,54 @@ async function getOrgDetails() {
       `Blog: ${orgDetails.blog || 'No blog provided'}\n` +
       `Location: ${orgDetails.location || 'No location provided'}\n` +
       `Email: ${orgDetails.email || 'No email provided'}\n` +
-      `Public Repos: ${orgDetails.publicRepos}\n` +
-      `Public Gists: ${orgDetails.publicGists}\n` +
+      `Public Repos: ${orgDetails.public_repos}\n` +
+      `Public Gists: ${orgDetails.public_gists}\n` +
       `Followers: ${orgDetails.followers}\n` +
       `Following: ${orgDetails.following}\n` +
-      `Created At: ${orgDetails.createdAt}\n` +
-      `Updated At: ${orgDetails.updatedAt}\n` +
-      `Members: ${orgDetails.members.length}\n` +
-      `Teams: ${orgDetails.teams.length}\n` +
-      `Repositories: ${orgDetails.repositories.length}`;
+      `Created At: ${orgDetails.created_at}\n` +
+      `Updated At: ${orgDetails.updated_at}`;
     logger.info('Fetched organization details successfully');
     return response;
   } catch (error) {
     logger.error('Error fetching organization details:', error);
     handleError(error, 'Error fetching organization details');
+    throw error;
+  }
+}
+
+/**
+ * Get the last commit details for a specific repository.
+ * @param {string} repoName - The name of the repository.
+ * @returns {Promise<string>} The formatted last commit details.
+ */
+async function getLastCommitDetails(repoName) {
+  try {
+    const lastCommitDetails = await githubService.getLastCommitDetails(repoName);
+    const response = `Last Commit Details for ${repoName}:\n\n` +
+      `SHA: ${lastCommitDetails.sha}\n` +
+      `Author: ${lastCommitDetails.author}\n` +
+      `Message: ${lastCommitDetails.message}\n` +
+      `Date: ${lastCommitDetails.date}`;
+    logger.info(`Fetched last commit details for repository: ${repoName}`);
+    return response;
+  } catch (error) {
+    logger.error(`Error fetching last commit details for repository: ${repoName}`, error);
+    handleError(error, `Error fetching last commit details for repository: ${repoName}`);
+    throw error;
+  }
+}
+
+/**
+ * Sends a question to ChatGPT and receives an answer.
+ * @param {string} question - The question to ask ChatGPT.
+ * @returns {Promise<string>} - The answer from ChatGPT.
+ */
+async function askChatGPT(question) {
+  try {
+    const answer = await chatgptService.askChatGPT(question);
+    return answer;
+  } catch (error) {
+    logger.error('Error asking ChatGPT:', error);
     throw error;
   }
 }
@@ -237,4 +281,6 @@ module.exports = {
   getTeamList,
   getTeamDetails,
   getOrgDetails,
+  getLastCommitDetails,
+  askChatGPT,
 };

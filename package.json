@@ -16,7 +16,9 @@
     "@slack/bolt": "^3.18.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "idna-uts46-hx": "^6.0.4",
     "js-yaml": "^4.1.0",
+    "openai": "^4.40.0",
     "winston": "^3.13.0"
   }
 }

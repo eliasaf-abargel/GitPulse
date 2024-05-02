@@ -4,6 +4,7 @@ const path = require('path');
 const logger = require('../utils/logger');
 const slackService = require('../services/slackService');
 const githubService = require('../services/githubService');
+const chatgptService = require('../services/chatgptService');
 const config = require('../config/config');
 const { handleError } = require('../utils/errorHandler');
 
@@ -45,7 +46,7 @@ async function dispatchSlackCommand(command, text, responseUrl) {
     // Send the initial response
     await slackService.sendResponse(responseUrl, slackCommand.response.text);
 
-    // Process the command and fetch the data from GitHub
+    // Process the command and fetch the data from GitHub or ChatGPT
     let response;
     switch (command) {
       case '/repo-list':
@@ -68,6 +69,12 @@ async function dispatchSlackCommand(command, text, responseUrl) {
         break;
       case '/org-details':
         response = await slackService.getOrgDetails();
+        break;
+      case '/last-commit':
+        response = await slackService.getLastCommitDetails(text);
+        break;
+      case '/ask':
+        response = await slackService.askChatGPT(text);
         break;
       default:
         logger.warn('Unknown command. Skipping response.');

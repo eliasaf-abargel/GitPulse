@@ -1,28 +1,42 @@
 // utils/errorHandler.js
 const logger = require('./logger');
 
-
 /**
  * Custom Error classes
  */
-class ValidationError extends Error {
-  constructor(message) {
+class CustomError extends Error {
+  constructor(message, statusCode) {
     super(message);
+    this.name = 'CustomError';
+    this.statusCode = statusCode;
+  }
+}
+
+class ValidationError extends CustomError {
+  constructor(message) {
+    super(message, 400);
     this.name = 'ValidationError';
   }
 }
 
-class NotFoundError extends Error {
+class NotFoundError extends CustomError {
   constructor(message) {
-    super(message);
+    super(message, 404);
     this.name = 'NotFoundError';
   }
 }
 
-class UnauthorizedError extends Error {
+class UnauthorizedError extends CustomError {
   constructor(message) {
-    super(message);
+    super(message, 401);
     this.name = 'UnauthorizedError';
+  }
+}
+
+class InternalServerError extends CustomError {
+  constructor(message) {
+    super(message, 500);
+    this.name = 'InternalServerError';
   }
 }
 
@@ -34,27 +48,13 @@ class UnauthorizedError extends Error {
  * @param {Function} next - The next middleware function.
  */
 function errorHandler(err, req, res, next) {
-  let status = 500;
-  let message = 'Internal Server Error';
+  let status = err.statusCode || 500;
+  let message = err.message || 'Internal Server Error';
 
-  // Customize the error response based on the error type
-  switch (true) {
-    case err instanceof ValidationError:
-      status = 400;
-      message = err.message;
-      break;
-    case err instanceof NotFoundError:
-      status = 404;
-      message = err.message;
-      break;
-    case err instanceof UnauthorizedError:
-      status = 401;
-      message = 'Unauthorized';
-      break;
-    default:
-      logger.error('Unhandled error:', err);
-  }
+  // Log the error
+  logger.error('Error:', err);
 
+  // Send the error response
   res.status(status).json({ error: message });
 }
 
@@ -65,15 +65,17 @@ function errorHandler(err, req, res, next) {
  */
 function handleError(error, message) {
   logger.error(`${message}: ${error.message}`);
-  logger.error(error);
+  logger.error('Error details:', error);
 
   // Additional error handling logic, if needed
 }
 
 module.exports = {
-  errorHandler,
-  handleError,
+  CustomError,
   ValidationError,
   NotFoundError,
   UnauthorizedError,
+  InternalServerError,
+  errorHandler,
+  handleError,
 };
