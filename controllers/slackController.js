@@ -117,14 +117,9 @@ async function handleSlackCommand(req, res, next) {
     await dispatchSlackCommand(command, text, response_url);
     res.status(200).send();
   } catch (error) {
+    logger.error(`Error handling Slack command: ${command}`, error);
+    await slackService.sendResponse(response_url, 'An error occurred. Please try again later.');
     next(error);
-    res.status(500).send('Internal Server Error');
-    handleError(error, 'Error handling Slack command');
-  } finally {
-    if (response_url) {
-      // Send an empty response to prevent a timeout error
-      await slackService.sendResponse(response_url, '');
-    }
   }
 }
 

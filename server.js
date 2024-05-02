@@ -63,6 +63,10 @@ app.post('/slack/events', async (req, res) => {
 
 // Error handling middleware
 app.use(errorHandler);
+app.use((err, req, res, next) => {
+  logger.error('Unhandled error:', err);
+  res.status(500).send('Internal Server Error');
+});
 
 // Start the Express server
 app.listen(4000, () => {

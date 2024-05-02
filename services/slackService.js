@@ -263,11 +263,16 @@ async function getLastCommitDetails(repoName) {
  */
 async function askChatGPT(question) {
   try {
-    const answer = await chatgptService.askChatGPT(question);
+    const answer = await chatgptService.generateChatGPTResponse(question);
     return answer;
   } catch (error) {
-    logger.error('Error asking ChatGPT:', error);
-    throw error;
+    if (error instanceof InternalServerError) {
+      logger.error('Internal server error occurred while asking ChatGPT:', error);
+      throw error;
+    } else {
+      logger.error('Error asking ChatGPT:', error);
+      throw new InternalServerError('Failed to generate response');
+    }
   }
 }
 
