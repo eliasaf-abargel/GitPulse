@@ -44,7 +44,7 @@ slackApp.event("app_mention", async ({ event, context, say }) => {
     logger.error("Error handling Slack event:", error);
   }
 });
-
+//need to move
 app.post("/slack/events", async (req: Request, res: Response) => {
   const { challenge } = req.body;
   if (challenge) {
@@ -66,7 +66,7 @@ app.listen(4000, () => {
 
 (async () => {
   await slackApp.start(port || 4000);
-  logger.info(`Slack app is running on port ${process.env.PORT || 4000}`);
+  logger.info(`Slack app is running on port ${port || 4000}`);
 })();
 
 process.on("unhandledRejection", (error: any) => {
