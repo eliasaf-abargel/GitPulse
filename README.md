@@ -34,6 +34,7 @@ GITHUB_ORG=<your_github_organization>
 SLACK_BOT_TOKEN=<your_slack_bot_token>
 SLACK_SIGNING_SECRET=<your_slack_signing_secret>
 SLACK_CHANNEL=<your_slack_channel_id>
+CHATGPT_API_KEY=<your_secret_api>
 ```
 
 ### Slack App Configuration
