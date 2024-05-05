@@ -1,9 +1,9 @@
 version: '3'
 services:
-  gitpulse:
+  gitpulse-blue:
     build: .
     ports:
-      - "4000:4000"
+      - "4005:4000"
     env_file:
       - .env
     restart: always
@@ -12,3 +12,17 @@ services:
       options:
         gelf-address: "udp://localhost:12201"
         tag: "gitpulse"
+
+  gitpulse-green:
+    build: .
+    ports:
+      - "4006:4000"
+    env_file:
+      - .env
+    restart: always
+    logging:
+      driver: "gelf"
+      options:
+        gelf-address: "udp://localhost:12201"
+        tag: "gitpulse"
+
