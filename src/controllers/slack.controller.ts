@@ -17,11 +17,12 @@ import {
   getUserListSlackServices,
   sendResponseSlackServices,
 } from "../services/slack.service";
-import { SlackConfig, SlackCommand } from "../interfaces/slack.interface";
-
+import { SlackConfig } from "../interfaces/slack.interface";
 
 const slackConfigPath = path.resolve(__dirname, "../config/slack-config.yaml");
-const slackConfig = yaml.load(fs.readFileSync(slackConfigPath, "utf8")) as SlackConfig;
+const slackConfig = yaml.load(
+  fs.readFileSync(slackConfigPath, "utf8")
+) as SlackConfig;
 
 const validateSlackChannel = async (channelId: string): Promise<boolean> => {
   if (channelId !== slackChannel) {
@@ -34,11 +35,11 @@ const validateSlackChannel = async (channelId: string): Promise<boolean> => {
   return true;
 };
 
-async function dispatchSlackCommand(
+const dispatchSlackCommand = async (
   command: string,
   text: string,
   responseUrl: string
-) {
+) => {
   const slackCommand = slackConfig.slack.commands.find(
     (cmd: { command: string }) => cmd.command === command
   );
@@ -103,7 +104,7 @@ async function dispatchSlackCommand(
     handleError(error as Error, "Error handling Slack command");
     throw error;
   }
-}
+};
 
 const handleSlackCommand = async (
   req: Request,
@@ -132,4 +133,4 @@ const handleSlackCommand = async (
   }
 };
 
-export { handleSlackCommand };
+export { handleSlackCommand, validateSlackChannel, dispatchSlackCommand };

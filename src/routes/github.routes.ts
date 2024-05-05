@@ -14,7 +14,7 @@ import {
 
 githubRouter.get("/repo-list", getOrganizationRepositories);
 githubRouter.get(
-  "/slack/commands/repo-details/:repoName",
+  "/repo-details/:repoName",
   getRepositoryDetails
 );
 githubRouter.get("/user-list", getOrganizationMembers);

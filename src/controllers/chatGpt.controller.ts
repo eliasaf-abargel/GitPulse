@@ -4,7 +4,7 @@ import { handleError, InternalServerError } from "../utils/errorHandler";
 import { sendResponseGptervices } from "../services/chatgpt.service";
 import { askChatGPTSlackServices } from "../services/slack.service";
 
-const handleAskCommand = async (req: Request, res: Response) => {
+const handleAskCommandGit = async (req: Request, res: Response) => {
   const { text, response_url } = req.body;
 
   try {
@@ -37,4 +37,4 @@ const handleAskCommand = async (req: Request, res: Response) => {
   }
 };
 
-export { handleAskCommand };
+export { handleAskCommandGit };
