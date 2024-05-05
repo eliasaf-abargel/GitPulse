@@ -5,8 +5,9 @@
   "main": "routes.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
-    "build": "echo \"No build script defined\" && exit 0"
+    "build": "tsc && copyfiles -u 2 src/config/*.yaml dist/config",
+    "start": "node dist/server.js"
+
   },
   "keywords": [],
   "author": "",
@@ -25,6 +26,7 @@
     "@types/express": "^4.17.21",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.12.8",
+    "copyfiles": "^2.4.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   }

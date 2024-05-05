@@ -1,7 +1,7 @@
 import axios from "axios";
 import logger from "../utils/logger";
 import { InternalServerError, handleError } from "../utils/errorHandler";
-import { slackBotToken, slackChannel } from "../../config/envConfig";
+import { slackBotToken, slackChannel } from "../config/envConfig";
 import {
   getLastCommitDetailsFromGit,
   getOrganizationDetailsFromGit,

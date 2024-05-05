@@ -3,11 +3,10 @@ import bodyParser from "body-parser";
 import { App } from "@slack/bolt";
 import winston from "winston";
 import { errorHandler } from "./utils/errorHandler";
-import { slackBotToken, slackSigningSecret } from "../config/envConfig";
+import { slackBotToken, slackSigningSecret,port } from "./config/envConfig";
 import { chatGptRouter } from "./routes/chatGpt.routes";
 import { githubRouter } from "./routes/github.routes";
 import { slackRouter } from "./routes/slack.routes";
-import {port} from '../config/envConfig'
 
 const app = express();
 

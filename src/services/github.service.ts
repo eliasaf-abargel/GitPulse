@@ -1,5 +1,5 @@
 import axios from "axios";
-import { organizationName, githubToken } from "../../config/envConfig";
+import { organizationName, githubToken } from "../config/envConfig";
 import logger from "../utils/logger";
 import { CustomError } from "../utils/errorHandler";
 import { GitHubMember, Repository } from "../interfaces/gtihub.interface";

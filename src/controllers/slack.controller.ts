@@ -3,7 +3,7 @@ import yaml from "js-yaml";
 import fs from "fs";
 import path from "path";
 import logger from "../utils/logger";
-import { slackChannel } from "../../config/envConfig";
+import { slackChannel } from "../config/envConfig";
 import { handleError } from "../utils/errorHandler";
 import {
   askChatGPTSlackServices,
