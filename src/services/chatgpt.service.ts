@@ -1,4 +1,3 @@
-// const {OpenAI} = require("openai");
 import OpenAI from "openai";
 import { chatgptApiKey } from "../config/envConfig";
 
