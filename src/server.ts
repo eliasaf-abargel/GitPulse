@@ -7,6 +7,7 @@ import { slackBotToken, slackSigningSecret } from "../config/envConfig";
 import { chatGptRouter } from "./routes/chatGpt.routes";
 import { githubRouter } from "./routes/github.routes";
 import { slackRouter } from "./routes/slack.routes";
+import {port} from '../config/envConfig'
 
 const app = express();
 
@@ -65,7 +66,7 @@ app.listen(4000, () => {
 });
 
 (async () => {
-  await slackApp.start(process.env.PORT || 4000);
+  await slackApp.start(port || 4000);
   logger.info(`Slack app is running on port ${process.env.PORT || 4000}`);
 })();
 
