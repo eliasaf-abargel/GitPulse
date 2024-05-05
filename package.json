@@ -20,5 +20,12 @@
     "js-yaml": "^4.1.0",
     "openai": "^4.40.0",
     "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.12.8",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
   }
 }
