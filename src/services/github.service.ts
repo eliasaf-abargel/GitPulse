@@ -338,9 +338,7 @@ const getOrganizationDetailsFromGit = async () => {
     throw new CustomError("Failed to fetch organization details", 500);
   }
 };
-// const getRepositoryTeamsF=(repoName: any)=> {
-//   throw new Error("Function not implemented.");
-// }
+
 
 export {
   getOrganizationRepositoriesFromGit,
