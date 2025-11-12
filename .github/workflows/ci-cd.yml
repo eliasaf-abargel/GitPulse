@@ -47,14 +47,16 @@ jobs:
           git clean -fd
           docker system prune -f || true
 
+      - name: Clean npm cache and node_modules
+        run: |
+          rm -rf node_modules
+          npm cache clean --force
+
       - name: Install dependencies from Fly
         run: |
           echo "Installing dependencies using Fly registry..."
-          npm ci || {
-            echo "⚠️ npm ci failed with Fly registry, trying with npm public registry as fallback..."
-            npm config set registry https://registry.npmjs.org/
-            npm ci
-          }
+          # Use npm install instead of npm ci for better compatibility with Fly registry
+          npm install
 
       - name: Build application
         run: npm run build
