@@ -121,6 +121,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup JFrog Fly
+        uses: jfrog/fly-action@v1
+        with:
+          url: https://infraops.jfrog.io
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
