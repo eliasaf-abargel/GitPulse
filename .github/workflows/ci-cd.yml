@@ -107,6 +107,13 @@ jobs:
           echo "Image: ${{ env.REGISTRY }}/docker/${{ env.IMAGE_NAME }}"
           echo "Tags: ${{ steps.meta.outputs.tags }}"
           echo "Image is now stored in Fly registry and ready for deployment"
+          echo ""
+          echo "📦 To view your Docker images in Fly Dashboard:"
+          echo "   https://fly.jfrog.ai/dashboard/registry/docker"
+          echo "   Look for: infraops.jfrog.io/docker/gitpulse"
+          echo ""
+          echo "📋 Note: Docker images appear under 'Docker Registry', not 'Artifacts'"
+          echo "   Artifacts tab shows npm packages, Maven artifacts, etc."
 
       - name: Cleanup Docker images
         if: always()
