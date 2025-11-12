@@ -1,11 +1,14 @@
 # Use a base image
-FROM infraops.jfrog.io/docker/node:14
+FROM infraops.jfrog.io/docker/node:18
 
-# Install GELF logging driver dependencies
+# Install GELF logging driver dependencies (if needed)
+# Note: Debian Bullseye (used by node:18) repositories are still active
 RUN apt-get update && apt-get install -y \
     libglib2.0-dev \
     libpcre3-dev \
-    zlib1g-dev
+    zlib1g-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
 WORKDIR /app
