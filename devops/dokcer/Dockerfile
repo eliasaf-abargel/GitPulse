@@ -1,5 +1,5 @@
 # Use a base image
-FROM node:14
+FROM gitpulse.jfrog.io/docker/node:14
 
 # Install GELF logging driver dependencies
 RUN apt-get update && apt-get install -y \
@@ -13,7 +13,20 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install dependencies
+# Configure npm to use JFrog Fly registry
+# Build args for npm authentication (optional, if registry requires auth)
+ARG NPM_USER
+ARG NPM_PASS
+ARG NPM_EMAIL
+RUN if [ -n "$NPM_USER" ] && [ -n "$NPM_PASS" ]; then \
+      npm config set registry https://gitpulse.jfrog.io/artifactory/api/npm/npm/ && \
+      npm config set //gitpulse.jfrog.io/artifactory/api/npm/npm/:_authToken "$NPM_PASS" && \
+      npm config set //gitpulse.jfrog.io/artifactory/api/npm/npm/:always-auth true; \
+    else \
+      npm config set registry https://gitpulse.jfrog.io/artifactory/api/npm/npm/; \
+    fi
+
+# Install dependencies from Fly registry
 RUN npm install
 
 # Copy the application code

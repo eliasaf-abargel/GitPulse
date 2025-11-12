@@ -1,7 +1,7 @@
 version: '3'
 services:
   gitpulse-blue:
-    build: .
+    image: gitpulse.jfrog.io/docker/gitpulse:latest
     ports:
       - "4005:4000"
     env_file:
@@ -9,7 +9,7 @@ services:
     restart: always
 
   gitpulse-green:
-    build: .
+    image: gitpulse.jfrog.io/docker/gitpulse:latest
     ports:
       - "4006:4000"
     env_file:
