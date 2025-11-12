@@ -16,7 +16,7 @@ on:
 
 env:
   IMAGE_NAME: gitpulse
-  REGISTRY: gitpulse.jfrog.io
+  REGISTRY: infraops.jfrog.io
 
 permissions:
   contents: read
@@ -40,7 +40,7 @@ jobs:
       - name: Setup JFrog Fly
         uses: jfrog/fly-action@v1
         with:
-          url: https://gitpulse.jfrog.io
+          url: https://infraops.jfrog.io
 
       - name: Clean workspace
         run: |
@@ -49,7 +49,7 @@ jobs:
 
       - name: Configure npm registry for Fly
         run: |
-          npm config set registry https://gitpulse.jfrog.io/artifactory/api/npm/npm/
+          npm config set registry https://infraops.jfrog.io/artifactory/api/npm/npm/
           echo "✅ npm configured to use Fly registry"
 
       - name: Install dependencies from Fly
