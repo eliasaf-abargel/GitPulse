@@ -64,14 +64,6 @@ jobs:
       - name: Run tests
         run: npm test || echo "No tests configured"
 
-      - name: Publish npm package to Fly (optional)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          echo "📦 Publishing npm package to Fly registry..."
-          # Uncomment the line below if you want to publish your package
-          # npm publish --registry=https://infraops.jfrog.io/artifactory/api/npm/npm/ || echo "Package publish skipped (not configured)"
-          echo "ℹ️  To publish npm packages, uncomment the npm publish line above"
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -81,6 +73,13 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.FLY_USERNAME }}
           password: ${{ secrets.FLY_PASSWORD }}
+
+      - name: Extract version from package.json
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
 
       - name: Extract metadata
         id: meta
@@ -94,6 +93,16 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.version.outputs.version }}
+          flavor: |
+            suffix=-${{ github.ref_name }}
+          labels: |
+            org.opencontainers.image.title=GitPulse
+            org.opencontainers.image.description=GitHub-Slack Integration App
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+            org.opencontainers.image.vendor=eliasaf-abargel
 
       - name: Build and push Docker image to Fly
         uses: docker/build-push-action@v5
