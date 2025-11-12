@@ -47,13 +47,14 @@ jobs:
           git clean -fd
           docker system prune -f || true
 
-      - name: Configure npm registry for Fly
-        run: |
-          npm config set registry https://infraops.jfrog.io/artifactory/api/npm/npm/
-          echo "✅ npm configured to use Fly registry"
-
       - name: Install dependencies from Fly
-        run: npm ci
+        run: |
+          echo "Installing dependencies using Fly registry..."
+          npm ci || {
+            echo "⚠️ npm ci failed with Fly registry, trying with npm public registry as fallback..."
+            npm config set registry https://registry.npmjs.org/
+            npm ci
+          }
 
       - name: Build application
         run: npm run build
