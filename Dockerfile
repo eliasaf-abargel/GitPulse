@@ -21,12 +21,10 @@ COPY package*.json ./
 ARG NPM_USER
 ARG NPM_PASS
 ARG NPM_EMAIL
-RUN if [ -n "$NPM_USER" ] && [ -n "$NPM_PASS" ]; then \
-      npm config set registry https://infraops.jfrog.io/artifactory/api/npm/npm/ && \
-      npm config set //infraops.jfrog.io/artifactory/api/npm/npm/:_authToken "$NPM_PASS" && \
-      npm config set //infraops.jfrog.io/artifactory/api/npm/npm/:always-auth true; \
-    else \
-      npm config set registry https://infraops.jfrog.io/artifactory/api/npm/npm/; \
+RUN npm config set registry https://infraops.jfrog.io/artifactory/api/npm/npm/ && \
+    if [ -n "$NPM_USER" ] && [ -n "$NPM_PASS" ]; then \
+      echo "//infraops.jfrog.io/artifactory/api/npm/npm/:_authToken=$NPM_PASS" >> /root/.npmrc && \
+      echo "//infraops.jfrog.io/artifactory/api/npm/npm/:always-auth=true" >> /root/.npmrc; \
     fi
 
 # Install dependencies from Fly registry
