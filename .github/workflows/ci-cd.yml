@@ -73,7 +73,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      # Build Docker image with proper Fly path
+      # Build multi-platform Docker image (amd64 + arm64)
       - name: Build Docker image
         id: build
         run: |
@@ -83,10 +83,12 @@ jobs:
           # CRITICAL: Use /docker/ prefix as Fly requires!
           IMAGE_BASE="${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}"
           
-          echo "🐳 Building Docker image..."
+          echo "🐳 Building multi-platform Docker image..."
           echo "Image base: ${IMAGE_BASE}"
+          echo "Platforms: linux/amd64, linux/arm64"
           
-          docker build \
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
             --build-arg NPM_USER="${{ secrets.FLY_USERNAME }}" \
             --build-arg NPM_PASS="${{ secrets.FLY_PASSWORD }}" \
             --label "org.opencontainers.image.title=GitPulse" \
@@ -97,37 +99,13 @@ jobs:
             --tag "${IMAGE_BASE}:${VERSION}" \
             --tag "${IMAGE_BASE}:${SHA_SHORT}" \
             --tag "${IMAGE_BASE}:build-${{ github.run_number }}" \
+            --push \
             .
           
-          echo "✅ Build completed successfully"
+          echo "✅ Build and push completed successfully"
           echo "image_base=${IMAGE_BASE}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
-
-      # Push all tags to Fly
-      - name: Push Docker images to Fly
-        run: |
-          IMAGE_BASE="${{ steps.build.outputs.image_base }}"
-          VERSION="${{ steps.build.outputs.version }}"
-          SHA_SHORT="${{ steps.build.outputs.sha_short }}"
-          
-          echo "📤 Pushing Docker images to Fly registry..."
-          echo "Registry path: ${IMAGE_BASE}"
-          
-          # Push all tags one by one
-          echo "Pushing tag: latest"
-          docker push "${IMAGE_BASE}:latest"
-          
-          echo "Pushing tag: ${VERSION}"
-          docker push "${IMAGE_BASE}:${VERSION}"
-          
-          echo "Pushing tag: ${SHA_SHORT}"
-          docker push "${IMAGE_BASE}:${SHA_SHORT}"
-          
-          echo "Pushing tag: build-${{ github.run_number }}"
-          docker push "${IMAGE_BASE}:build-${{ github.run_number }}"
-          
-          echo "✅ All images pushed successfully!"
 
       - name: Display pushed image details
         run: |
