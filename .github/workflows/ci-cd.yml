@@ -17,10 +17,11 @@ on:
 env:
   IMAGE_NAME: gitpulse
   REGISTRY: infraops.jfrog.io
+  DOCKER_REPO: docker
 
 permissions:
   contents: read
-  id-token: write
+  id-token: write  # Required for OIDC
 
 jobs:
   build-and-test:
@@ -37,10 +38,24 @@ jobs:
           node-version: '18'
           cache: 'npm'
 
-      - name: Setup JFrog Fly
-        uses: jfrog/fly-action@v1
+      # Setup JFrog CLI with OIDC
+      - name: Setup JFrog CLI
+        id: setup-jfrog
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: https://${{ env.REGISTRY }}
         with:
-          url: https://infraops.jfrog.io
+          oidc-provider-name: github-actions  # Must match your OIDC config in JFrog
+
+      - name: Verify JFrog Connection
+        run: |
+          jf --version
+          jf rt ping
+
+      # Configure npm to use JFrog registry (optional - for npm packages)
+      - name: Configure npm registry
+        run: |
+          jf npm-config --repo-resolve=npm-virtual || echo "npm-virtual repo not found, skipping"
 
       - name: Clean workspace
         run: |
@@ -52,11 +67,8 @@ jobs:
           rm -rf node_modules
           npm cache clean --force
 
-      - name: Install dependencies from Fly
-        run: |
-          echo "Installing dependencies using Fly registry..."
-          # Use npm install instead of npm ci for better compatibility with Fly registry
-          npm install
+      - name: Install dependencies
+        run: npm install
 
       - name: Build application
         run: npm run build
@@ -74,30 +86,33 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      - name: Extract metadata
+      # Login to Docker registry using OIDC credentials
+      - name: Login to JFrog Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ steps.setup-jfrog.outputs.oidc-user }}
+          password: ${{ steps.setup-jfrog.outputs.oidc-token }}
+
+      - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/docker/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ steps.version.outputs.version }}
-          flavor: |
-            suffix=-${{ github.ref_name }}
+            type=raw,value=latest
+            type=sha,prefix={{branch}}-
           labels: |
             org.opencontainers.image.title=GitPulse
             org.opencontainers.image.description=GitHub-Slack Integration App
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.repositoryUrl }}
-            org.opencontainers.image.vendor=eliasaf-abargel
 
-      - name: Build and push Docker image to Fly
+      # Build and push Docker image
+      - name: Build and push Docker image
+        id: build-and-push
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -108,27 +123,36 @@ jobs:
           build-args: |
             NPM_USER=${{ secrets.FLY_USERNAME }}
             NPM_PASS=${{ secrets.FLY_PASSWORD }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/docker/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/docker/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
-      - name: Verify image pushed to Fly
+      # Publish build info to JFrog (optional but recommended)
+      - name: Publish Build Info
         run: |
-          echo "✅ Docker image successfully pushed to Fly registry"
-          echo "Image: ${{ env.REGISTRY }}/docker/${{ env.IMAGE_NAME }}"
-          echo "Tags: ${{ steps.meta.outputs.tags }}"
-          echo "Image is now stored in Fly registry and ready for deployment"
+          # Collect environment variables for build info
+          jf rt build-add-git ${{ env.IMAGE_NAME }} ${{ github.run_number }}
+          
+          # Publish build info
+          jf rt build-publish ${{ env.IMAGE_NAME }} ${{ github.run_number }}
+          
+          echo "✅ Build info published to JFrog"
+
+      - name: Verify image pushed
+        run: |
+          echo "✅ Docker image successfully pushed to JFrog registry"
+          echo "Image: ${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}"
+          echo "Tags:"
+          echo "  - ${{ steps.version.outputs.version }}"
+          echo "  - latest"
+          echo "  - ${{ github.sha }}"
           echo ""
-          echo "📦 To view your Docker images in Fly Dashboard:"
-          echo "   https://fly.jfrog.ai/dashboard/registry/docker"
-          echo "   Look for: infraops.jfrog.io/docker/gitpulse"
-          echo ""
-          echo "📋 Note: Docker images appear under 'Docker Registry', not 'Artifacts'"
-          echo "   Artifacts tab shows npm packages, Maven artifacts, etc."
+          echo "📦 To view your Docker images in JFrog:"
+          echo "   https://infraops.jfrog.io/ui/packages"
+          echo "   Or: https://infraops.jfrog.io/ui/repos/tree/General/docker"
 
       - name: Cleanup Docker images
         if: always()
-        run: |
-          docker image prune -f
+        run: docker image prune -f
 
   deploy:
     needs: build-and-test
@@ -138,22 +162,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup JFrog Fly
-        uses: jfrog/fly-action@v1
+      - name: Setup JFrog CLI
+        id: setup-jfrog
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: https://${{ env.REGISTRY }}
         with:
-          url: https://infraops.jfrog.io
+          oidc-provider-name: github-actions
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Deploy with Blue-Green strategy
-        run: |
-          echo "Pulling latest image from Fly registry"
-          docker pull ${{ env.REGISTRY }}/docker/${{ env.IMAGE_NAME }}:latest
-          
-          echo "Tagging image with commit SHA"
-          docker tag ${{ env.REGISTRY }}/docker/${{ env.IMAGE_NAME }}:latest ${{ env.REGISTRY }}/docker/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          
-          echo "Image ready for deployment: ${{ env.REGISTRY }}/docker/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          echo "To deploy, run: docker-compose -f docker-compose.yml pull && docker-compose -f docker-compose.yml up -d"
+      - name: Login to JFrog Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ steps.setup-jfrog.outputs.oidc-user }}
+          password: ${{ steps.setup-jfrog.outputs.oidc-token }}
 
+      - name: Pull latest image
+        run: |
+          echo "Pulling latest image from JFrog registry"
+          IMAGE_PATH="${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:latest"
+          
+          docker pull "$IMAGE_PATH"
+          
+          echo "Image ready for deployment: $IMAGE_PATH"
