@@ -1,5 +1,5 @@
-# Use a base image
-FROM infraops.jfrog.io/docker/node:18
+# Use public Node.js image from Docker Hub
+FROM node:18
 
 # Install GELF logging driver dependencies (if needed)
 # Note: Debian Bullseye (used by node:18) repositories are still active
@@ -40,8 +40,7 @@ RUN npm run build
 EXPOSE 4000
 
 # Define the healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl --fail http://localhost:4000/health || exit 1
+HEALTHCHECK CMD curl --fail http://localhost:4000/health || exit 1
 
 # Start the application
 CMD ["npm", "start"]

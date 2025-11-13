@@ -1,5 +1,5 @@
-# Use a base image
-FROM infraops.jfrog.io/docker/node:18
+# Use public Node.js image from Docker Hub
+FROM node:18
 
 # Install GELF logging driver dependencies (if needed)
 # Note: Debian Bullseye (used by node:18) repositories are still active
