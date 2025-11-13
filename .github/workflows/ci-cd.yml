@@ -17,10 +17,11 @@ on:
 env:
   IMAGE_NAME: gitpulse
   REGISTRY: infraops.jfrog.io
+  DOCKER_REPO: docker  # Fly REQUIRES this!
 
 permissions:
   contents: read
-  id-token: write  # Required for OIDC with Fly
+  id-token: write
 
 jobs:
   build-and-test:
@@ -37,7 +38,7 @@ jobs:
           node-version: '18'
           cache: 'npm'
 
-      # JFrog Fly Action - handles OIDC authentication automatically
+      # JFrog Fly Action - handles OIDC authentication
       - name: JFrog Fly - Configure package managers
         uses: jfrog/fly-action@v1
         with:
@@ -72,14 +73,19 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      # Build Docker image with a single tag first to test
+      # Build Docker image with proper Fly path
       - name: Build Docker image
         id: build
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          IMAGE_BASE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
           
-          echo "Building Docker image with tag: latest"
+          # CRITICAL: Use /docker/ prefix as Fly requires!
+          IMAGE_BASE="${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}"
+          
+          echo "🐳 Building Docker image..."
+          echo "Image base: ${IMAGE_BASE}"
+          
           docker build \
             --build-arg NPM_USER="${{ secrets.FLY_USERNAME }}" \
             --build-arg NPM_PASS="${{ secrets.FLY_PASSWORD }}" \
@@ -88,52 +94,50 @@ jobs:
             --label "org.opencontainers.image.version=${VERSION}" \
             --label "org.opencontainers.image.revision=${{ github.sha }}" \
             --tag "${IMAGE_BASE}:latest" \
+            --tag "${IMAGE_BASE}:${VERSION}" \
+            --tag "${IMAGE_BASE}:${SHA_SHORT}" \
+            --tag "${IMAGE_BASE}:build-${{ github.run_number }}" \
             .
           
+          echo "✅ Build completed successfully"
           echo "image_base=${IMAGE_BASE}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
 
-      # Push the latest tag first
-      - name: Push Docker image with latest tag
-        run: |
-          IMAGE_BASE="${{ steps.build.outputs.image_base }}"
-          
-          echo "📦 Pushing Docker image to Fly registry..."
-          echo "Image: ${IMAGE_BASE}:latest"
-          
-          docker push "${IMAGE_BASE}:latest"
-          
-          echo "✅ Image pushed successfully!"
-
-      # Now tag and push additional versions
-      - name: Tag and push additional versions
+      # Push all tags to Fly
+      - name: Push Docker images to Fly
         run: |
           IMAGE_BASE="${{ steps.build.outputs.image_base }}"
           VERSION="${{ steps.build.outputs.version }}"
-          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          SHA_SHORT="${{ steps.build.outputs.sha_short }}"
           
-          echo "📦 Creating additional tags..."
+          echo "📤 Pushing Docker images to Fly registry..."
+          echo "Registry path: ${IMAGE_BASE}"
           
-          docker tag "${IMAGE_BASE}:latest" "${IMAGE_BASE}:${VERSION}"
-          docker tag "${IMAGE_BASE}:latest" "${IMAGE_BASE}:${SHA_SHORT}"
-          docker tag "${IMAGE_BASE}:latest" "${IMAGE_BASE}:build-${{ github.run_number }}"
+          # Push all tags one by one
+          echo "Pushing tag: latest"
+          docker push "${IMAGE_BASE}:latest"
           
-          echo "📤 Pushing additional tags..."
+          echo "Pushing tag: ${VERSION}"
           docker push "${IMAGE_BASE}:${VERSION}"
+          
+          echo "Pushing tag: ${SHA_SHORT}"
           docker push "${IMAGE_BASE}:${SHA_SHORT}"
+          
+          echo "Pushing tag: build-${{ github.run_number }}"
           docker push "${IMAGE_BASE}:build-${{ github.run_number }}"
           
-          echo "✅ All tags pushed successfully!"
+          echo "✅ All images pushed successfully!"
 
       - name: Display pushed image details
         run: |
-          echo "✅ Docker images successfully pushed to JFrog Fly registry"
+          echo "✅ Docker images successfully pushed to JFrog Fly"
           echo ""
-          echo "🐳 Image: ${{ steps.build.outputs.image_base }}"
+          echo "🐳 Repository: ${{ steps.build.outputs.image_base }}"
           echo ""
-          echo "📦 Tags pushed:"
-          echo "  - ${{ steps.build.outputs.version }}"
+          echo "📦 Tags available:"
           echo "  - latest"
+          echo "  - ${{ steps.build.outputs.version }}"
           echo "  - ${{ steps.build.outputs.sha_short }}"
           echo "  - build-${{ github.run_number }}"
           echo ""
@@ -146,11 +150,11 @@ jobs:
 
       - name: Verify image is pullable
         run: |
-          echo "Testing pull of latest tag..."
+          echo "🔍 Testing pull of latest tag..."
           docker pull ${{ steps.build.outputs.image_base }}:latest
           
           echo "✅ Image pull successful!"
-          docker images | grep ${{ env.IMAGE_NAME }}
+          docker images | grep ${{ env.IMAGE_NAME }} || true
 
       - name: Cleanup Docker images
         if: always()
@@ -164,7 +168,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # JFrog Fly Action for deployment
+      # JFrog Fly Action
       - name: JFrog Fly - Configure package managers
         uses: jfrog/fly-action@v1
         with:
@@ -175,12 +179,15 @@ jobs:
 
       - name: Pull and verify latest image
         run: |
-          echo "Pulling latest image from JFrog Fly registry"
-          IMAGE_PATH="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          IMAGE_PATH="${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:latest"
+          
+          echo "⬇️ Pulling latest image from Fly registry"
+          echo "Image: ${IMAGE_PATH}"
           
           docker pull "$IMAGE_PATH"
           
           echo "✅ Image ready for deployment: $IMAGE_PATH"
           
           # Show image details
-          docker inspect "$IMAGE_PATH" --format='{{json .Config.Labels}}' | jq '.' || true
+          docker inspect "$IMAGE_PATH" --format='{{json .Config.Labels}}' | jq '.' || \
+          docker inspect "$IMAGE_PATH" --format='Labels: {{.Config.Labels}}'
