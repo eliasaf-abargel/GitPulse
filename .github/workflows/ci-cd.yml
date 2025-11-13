@@ -106,6 +106,24 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
+      # Create a Fly Release - this makes it visible in the Releases tab
+      - name: Create Fly Release
+        run: |
+          echo "📦 Creating Fly Release for version ${{ steps.version.outputs.version }}"
+          
+          # Get the Fly CLI from the action
+          FLY_CLI="${GITHUB_WORKSPACE}/.fly/fly"
+          if [ ! -f "$FLY_CLI" ]; then
+            FLY_CLI="/home/runner/work/_actions/jfrog/fly-action/v1/bin/fly-linux-x64"
+          fi
+          
+          # Create release using Fly CLI
+          $FLY_CLI release create \
+            --name "v${{ steps.version.outputs.version }}" \
+            --description "Release from commit ${{ github.sha }}" \
+            --package "${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" \
+            || echo "Release creation failed or not supported, artifacts are still available"
+
       - name: Verify image pushed
         run: |
           echo "✅ Docker image successfully pushed to JFrog Fly registry"
@@ -118,6 +136,9 @@ jobs:
           echo "📦 To view your Docker images in Fly Dashboard:"
           echo "   https://fly.jfrog.ai/dashboard"
           echo "   Navigate to: My Registry > ${{ github.repository }}"
+          echo ""
+          echo "🔗 Direct link to artifacts:"
+          echo "   https://fly.jfrog.ai/registry/${{ github.repository }}"
 
       - name: Cleanup Docker images
         if: always()
