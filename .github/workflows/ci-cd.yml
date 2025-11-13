@@ -21,7 +21,7 @@ env:
 
 permissions:
   contents: read
-  id-token: write  # Required for OIDC
+  id-token: write  # Required for OIDC with Fly
 
 jobs:
   build-and-test:
@@ -38,24 +38,11 @@ jobs:
           node-version: '18'
           cache: 'npm'
 
-      # Setup JFrog CLI with OIDC
-      - name: Setup JFrog CLI
-        id: setup-jfrog
-        uses: jfrog/setup-jfrog-cli@v4
-        env:
-          JF_URL: https://${{ env.REGISTRY }}
+      # JFrog Fly Action - handles OIDC authentication automatically
+      - name: JFrog Fly - Configure package managers
+        uses: jfrog/fly-action@v1
         with:
-          oidc-provider-name: github-actions  # Must match your OIDC config in JFrog
-
-      - name: Verify JFrog Connection
-        run: |
-          jf --version
-          jf rt ping
-
-      # Configure npm to use JFrog registry (optional - for npm packages)
-      - name: Configure npm registry
-        run: |
-          jf npm-config --repo-resolve=npm-virtual || echo "npm-virtual repo not found, skipping"
+          url: https://${{ env.REGISTRY }}
 
       - name: Clean workspace
         run: |
@@ -86,14 +73,6 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      # Login to Docker registry using OIDC credentials
-      - name: Login to JFrog Docker Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ steps.setup-jfrog.outputs.oidc-user }}
-          password: ${{ steps.setup-jfrog.outputs.oidc-token }}
-
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -111,6 +90,7 @@ jobs:
             org.opencontainers.image.source=${{ github.repositoryUrl }}
 
       # Build and push Docker image
+      # Fly action already configured Docker authentication
       - name: Build and push Docker image
         id: build-and-push
         uses: docker/build-push-action@v5
@@ -126,29 +106,18 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
-      # Publish build info to JFrog (optional but recommended)
-      - name: Publish Build Info
-        run: |
-          # Collect environment variables for build info
-          jf rt build-add-git ${{ env.IMAGE_NAME }} ${{ github.run_number }}
-          
-          # Publish build info
-          jf rt build-publish ${{ env.IMAGE_NAME }} ${{ github.run_number }}
-          
-          echo "✅ Build info published to JFrog"
-
       - name: Verify image pushed
         run: |
-          echo "✅ Docker image successfully pushed to JFrog registry"
+          echo "✅ Docker image successfully pushed to JFrog Fly registry"
           echo "Image: ${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}"
           echo "Tags:"
           echo "  - ${{ steps.version.outputs.version }}"
           echo "  - latest"
           echo "  - ${{ github.sha }}"
           echo ""
-          echo "📦 To view your Docker images in JFrog:"
-          echo "   https://infraops.jfrog.io/ui/packages"
-          echo "   Or: https://infraops.jfrog.io/ui/repos/tree/General/docker"
+          echo "📦 To view your Docker images in Fly Dashboard:"
+          echo "   https://fly.jfrog.ai/dashboard"
+          echo "   Navigate to: My Registry > ${{ github.repository }}"
 
       - name: Cleanup Docker images
         if: always()
@@ -162,27 +131,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup JFrog CLI
-        id: setup-jfrog
-        uses: jfrog/setup-jfrog-cli@v4
-        env:
-          JF_URL: https://${{ env.REGISTRY }}
+      # JFrog Fly Action for deployment
+      - name: JFrog Fly - Configure package managers
+        uses: jfrog/fly-action@v1
         with:
-          oidc-provider-name: github-actions
+          url: https://${{ env.REGISTRY }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to JFrog Docker Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ steps.setup-jfrog.outputs.oidc-user }}
-          password: ${{ steps.setup-jfrog.outputs.oidc-token }}
-
       - name: Pull latest image
         run: |
-          echo "Pulling latest image from JFrog registry"
+          echo "Pulling latest image from JFrog Fly registry"
           IMAGE_PATH="${{ env.REGISTRY }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:latest"
           
           docker pull "$IMAGE_PATH"
