@@ -17,7 +17,6 @@ on:
 env:
   IMAGE_NAME: gitpulse
   REGISTRY: infraops.jfrog.io
-  # Remove DOCKER_REPO - Fly doesn't need it!
 
 permissions:
   contents: read
@@ -73,81 +72,82 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      # Create multiple tags - THIS IS KEY!
-      - name: Generate Docker tags
-        id: docker-tags
+      # Build Docker image with a single tag first to test
+      - name: Build Docker image
+        id: build
         run: |
-          REGISTRY="${{ env.REGISTRY }}"
-          IMAGE="${{ env.IMAGE_NAME }}"
           VERSION="${{ steps.version.outputs.version }}"
+          IMAGE_BASE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          
+          echo "Building Docker image with tag: latest"
+          docker build \
+            --build-arg NPM_USER="${{ secrets.FLY_USERNAME }}" \
+            --build-arg NPM_PASS="${{ secrets.FLY_PASSWORD }}" \
+            --label "org.opencontainers.image.title=GitPulse" \
+            --label "org.opencontainers.image.description=GitHub-Slack Integration App" \
+            --label "org.opencontainers.image.version=${VERSION}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --tag "${IMAGE_BASE}:latest" \
+            .
+          
+          echo "image_base=${IMAGE_BASE}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      # Push the latest tag first
+      - name: Push Docker image with latest tag
+        run: |
+          IMAGE_BASE="${{ steps.build.outputs.image_base }}"
+          
+          echo "📦 Pushing Docker image to Fly registry..."
+          echo "Image: ${IMAGE_BASE}:latest"
+          
+          docker push "${IMAGE_BASE}:latest"
+          
+          echo "✅ Image pushed successfully!"
+
+      # Now tag and push additional versions
+      - name: Tag and push additional versions
+        run: |
+          IMAGE_BASE="${{ steps.build.outputs.image_base }}"
+          VERSION="${{ steps.build.outputs.version }}"
           SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
           
-          # Create multiple tags
-          TAGS="${REGISTRY}/${IMAGE}:${VERSION}"
-          TAGS="${TAGS},${REGISTRY}/${IMAGE}:latest"
-          TAGS="${TAGS},${REGISTRY}/${IMAGE}:${SHA_SHORT}"
-          TAGS="${TAGS},${REGISTRY}/${IMAGE}:build-${{ github.run_number }}"
+          echo "📦 Creating additional tags..."
           
-          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
-          echo "Generated tags:"
-          echo "$TAGS" | tr ',' '\n'
-
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=,format=short
-            type=raw,value=build-${{ github.run_number }}
-          labels: |
-            org.opencontainers.image.title=GitPulse
-            org.opencontainers.image.description=GitHub-Slack Integration App
-            org.opencontainers.image.version=${{ steps.version.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=${{ github.repositoryUrl }}
-            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
-
-      # Build and push Docker image with multiple tags
-      - name: Build and push Docker image
-        id: build-and-push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            NPM_USER=${{ secrets.FLY_USERNAME }}
-            NPM_PASS=${{ secrets.FLY_PASSWORD }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          docker tag "${IMAGE_BASE}:latest" "${IMAGE_BASE}:${VERSION}"
+          docker tag "${IMAGE_BASE}:latest" "${IMAGE_BASE}:${SHA_SHORT}"
+          docker tag "${IMAGE_BASE}:latest" "${IMAGE_BASE}:build-${{ github.run_number }}"
+          
+          echo "📤 Pushing additional tags..."
+          docker push "${IMAGE_BASE}:${VERSION}"
+          docker push "${IMAGE_BASE}:${SHA_SHORT}"
+          docker push "${IMAGE_BASE}:build-${{ github.run_number }}"
+          
+          echo "✅ All tags pushed successfully!"
 
       - name: Display pushed image details
         run: |
-          echo "✅ Docker image successfully pushed to JFrog Fly registry"
+          echo "✅ Docker images successfully pushed to JFrog Fly registry"
           echo ""
-          echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          echo "🐳 Image: ${{ steps.build.outputs.image_base }}"
           echo ""
-          echo "📦 Tags created:"
-          echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n' | sed 's/^/  - /'
+          echo "📦 Tags pushed:"
+          echo "  - ${{ steps.build.outputs.version }}"
+          echo "  - latest"
+          echo "  - ${{ steps.build.outputs.sha_short }}"
+          echo "  - build-${{ github.run_number }}"
           echo ""
           echo "🔗 View in Fly Dashboard:"
           echo "   https://fly.jfrog.ai/registry/${{ github.repository }}"
           echo ""
           echo "📥 Pull commands:"
-          echo "   docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-          echo "   docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
-          echo ""
-          echo "🆔 Image digest: ${{ steps.build-and-push.outputs.digest }}"
+          echo "   docker pull ${{ steps.build.outputs.image_base }}:latest"
+          echo "   docker pull ${{ steps.build.outputs.image_base }}:${{ steps.build.outputs.version }}"
 
       - name: Verify image is pullable
         run: |
           echo "Testing pull of latest tag..."
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker pull ${{ steps.build.outputs.image_base }}:latest
           
           echo "✅ Image pull successful!"
           docker images | grep ${{ env.IMAGE_NAME }}
@@ -183,4 +183,4 @@ jobs:
           echo "✅ Image ready for deployment: $IMAGE_PATH"
           
           # Show image details
-          docker inspect "$IMAGE_PATH" --format='{{json .Config.Labels}}' | jq
+          docker inspect "$IMAGE_PATH" --format='{{json .Config.Labels}}' | jq '.' || true
