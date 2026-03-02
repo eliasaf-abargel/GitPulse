@@ -32,9 +32,9 @@ permissions:
   id-token: write
 
 env:
-  JF_URL: ${{ vars.JF_URL || 'https://infraops.jfrog.io' }}
-  DOCKER_REGISTRY: ${{ vars.DOCKER_REGISTRY || 'infraops.jfrog.io' }}
-  IMAGE_REPO: ${{ vars.IMAGE_REPO || 'docker' }}
+  JF_URL: ${{ vars.JF_URL || 'https://frogops1.jfrog.io' }}
+  DOCKER_REGISTRY: ${{ vars.DOCKER_REGISTRY || 'frogops1.jfrog.io' }}
+  IMAGE_REPO: ${{ vars.IMAGE_REPO || 'docker-local' }}
   IMAGE_NAME: gitpulse
   PROJECT_KEY: ${{ vars.JF_PROJECT_KEY || 'ci' }}
   DOCKERFILE_PATH: Dockerfile
