@@ -50,17 +50,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup JFrog CLI
+        id: setup-jfrog-cli
         uses: jfrog/setup-jfrog-cli@v4
+        with:
+          oidc-provider-name: github
+          oidc-audience: jfrog-github
         env:
           JF_URL: ${{ env.JF_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}
-
-      - name: Validate required auth
-        run: |
-          if [ -z "${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}" ]; then
-            echo "Missing required secret: JF_ACCESS_TOKEN (or JFROG_ACCESS_TOKEN)." >&2
-            exit 1
-          fi
 
       - name: Docker Login
         run: |
@@ -88,7 +85,7 @@ jobs:
           jf docker build \
             --tag "${IMAGE}" \
             --label "org.opencontainers.image.revision=${{ github.sha }}" \
-            --build-arg "NPM_AUTH_TOKEN=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}" \
+            --build-arg "NPM_AUTH_TOKEN=${{ steps.setup-jfrog-cli.outputs.oidc-token || secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}" \
             --build-arg "NPM_REGISTRY_URL=${{ env.NPM_REGISTRY_URL }}" \
             --file "${{ env.DOCKERFILE_PATH }}" \
             .
@@ -102,17 +99,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup JFrog CLI
+        id: setup-jfrog-cli
         uses: jfrog/setup-jfrog-cli@v4
+        with:
+          oidc-provider-name: github
+          oidc-audience: jfrog-github
         env:
           JF_URL: ${{ env.JF_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}
-
-      - name: Validate required auth
-        run: |
-          if [ -z "${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}" ]; then
-            echo "Missing required secret: JF_ACCESS_TOKEN (or JFROG_ACCESS_TOKEN)." >&2
-            exit 1
-          fi
 
       - name: Docker Login
         run: |
@@ -151,7 +145,7 @@ jobs:
             --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
             --label "org.opencontainers.image.revision=${{ github.sha }}" \
             --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --build-arg "NPM_AUTH_TOKEN=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}" \
+            --build-arg "NPM_AUTH_TOKEN=${{ steps.setup-jfrog-cli.outputs.oidc-token || secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}" \
             --build-arg "NPM_REGISTRY_URL=${{ env.NPM_REGISTRY_URL }}" \
             --file "${{ env.DOCKERFILE_PATH }}" \
             .
