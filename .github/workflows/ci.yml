@@ -26,6 +26,12 @@ on:
         default: "Y"
         type: choice
         options: ["Y", "N"]
+      xray_block_on_fail:
+        description: Block pipeline on High/Critical vulnerabilities
+        required: false
+        default: "N"
+        type: choice
+        options: ["Y", "N"]
 
 permissions:
   contents: read
@@ -39,6 +45,7 @@ env:
   PROJECT_KEY: ${{ vars.JF_PROJECT_KEY || 'ci' }}
   DOCKERFILE_PATH: Dockerfile
   NPM_REGISTRY_URL: ${{ vars.NPM_REGISTRY_URL || 'https://registry.npmjs.org' }}
+  XRAY_BLOCK_ON_FAIL: ${{ vars.XRAY_BLOCK_ON_FAIL || 'N' }}
 
 jobs:
   validate:
@@ -162,14 +169,23 @@ jobs:
           jf docker push "${{ steps.meta.outputs.full_image }}"
 
       - name: Xray scan
+        id: xray_scan
         if: ${{ github.event.inputs.xray_scan != 'N' }}
         run: |
-          SCAN_JSON="$(jf docker scan "${{ steps.meta.outputs.full_image }}" --format=json 2>/dev/null || echo '{"vulnerabilities":[]}')"
+          SCAN_JSON="$(timeout 300 jf docker scan "${{ steps.meta.outputs.full_image }}" --format=json 2>/dev/null || echo '{"vulnerabilities":[]}')"
           CRITICAL="$(echo "$SCAN_JSON" | jq '[.vulnerabilities[]? | select(.severity == "Critical")] | length')"
           HIGH="$(echo "$SCAN_JSON" | jq '[.vulnerabilities[]? | select(.severity == "High")] | length')"
           echo "Critical=$CRITICAL High=$HIGH"
+          echo "critical=$CRITICAL" >> "$GITHUB_OUTPUT"
+          echo "high=$HIGH" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce Xray gate
+        if: ${{ github.event.inputs.xray_scan != 'N' && (env.XRAY_BLOCK_ON_FAIL == 'Y' || github.event.inputs.xray_block_on_fail == 'Y') }}
+        run: |
+          CRITICAL="${{ steps.xray_scan.outputs.critical || '0' }}"
+          HIGH="${{ steps.xray_scan.outputs.high || '0' }}"
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
-            echo "Xray gate failed: critical/high vulnerabilities detected." >&2
+            echo "Xray gate failed: Critical=$CRITICAL High=$HIGH" >&2
             exit 1
           fi
 
