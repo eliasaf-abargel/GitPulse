@@ -59,10 +59,22 @@ jobs:
         run: jf rt ping
 
       - name: Docker Login (JFrog CLI)
-        id: jf_login
         run: |
+          set -e
           REG="${{ env.DOCKER_REGISTRY }}"
-          jf docker login "$REG"
+          if jf docker login "$REG"; then
+            exit 0
+          fi
+
+          USERNAME="${{ secrets.JF_DOCKER_USER || secrets.FLY_USERNAME }}"
+          PASSWORD="${{ secrets.JF_DOCKER_PASSWORD || secrets.FLY_PASSWORD }}"
+          if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
+            echo "$PASSWORD" | docker login "$REG" -u "$USERNAME" --password-stdin
+            exit 0
+          fi
+
+          echo "Docker login failed for $REG and no fallback username/password secrets were provided." >&2
+          exit 1
 
       - name: Build image (no push)
         run: |
@@ -94,10 +106,22 @@ jobs:
         run: jf rt ping
 
       - name: Docker Login (JFrog CLI)
-        id: jf_login
         run: |
+          set -e
           REG="${{ env.DOCKER_REGISTRY }}"
-          jf docker login "$REG"
+          if jf docker login "$REG"; then
+            exit 0
+          fi
+
+          USERNAME="${{ secrets.JF_DOCKER_USER || secrets.FLY_USERNAME }}"
+          PASSWORD="${{ secrets.JF_DOCKER_PASSWORD || secrets.FLY_PASSWORD }}"
+          if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
+            echo "$PASSWORD" | docker login "$REG" -u "$USERNAME" --password-stdin
+            exit 0
+          fi
+
+          echo "Docker login failed for $REG and no fallback username/password secrets were provided." >&2
+          exit 1
 
       - name: Resolve image tag
         id: meta
