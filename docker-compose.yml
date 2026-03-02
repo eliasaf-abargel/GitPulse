@@ -1,7 +1,7 @@
 version: '3'
 services:
   gitpulse-blue:
-    image: infraops.jfrog.io/docker/gitpulse:latest
+    image: ${DOCKER_REGISTRY:-frogops1.jfrog.io}/${IMAGE_REPO:-docker-local}/${ENV_PATH:-development}/${IMAGE_NAME:-gitpulse}:${IMAGE_TAG:-latest}
     ports:
       - "4005:4000"
     env_file:
@@ -9,10 +9,9 @@ services:
     restart: always
 
   gitpulse-green:
-    image: infraops.jfrog.io/docker/gitpulse:latest
+    image: ${DOCKER_REGISTRY:-frogops1.jfrog.io}/${IMAGE_REPO:-docker-local}/${ENV_PATH:-development}/${IMAGE_NAME:-gitpulse}:${IMAGE_TAG:-latest}
     ports:
       - "4006:4000"
     env_file:
       - .env
     restart: always
-
