@@ -155,7 +155,11 @@ jobs:
             .
 
       - name: Push image
-        run: jf docker push "${{ steps.meta.outputs.full_image }}"
+        run: |
+          if docker push "${{ steps.meta.outputs.full_image }}"; then
+            exit 0
+          fi
+          jf docker push "${{ steps.meta.outputs.full_image }}"
 
       - name: Xray scan
         if: ${{ github.event.inputs.xray_scan != 'N' }}
@@ -171,6 +175,7 @@ jobs:
 
       - name: Publish build info
         if: always()
+        continue-on-error: true
         run: |
           jf rt build-add-git --project "${{ env.PROJECT_KEY }}"
           jf rt build-publish --project "${{ env.PROJECT_KEY }}"
