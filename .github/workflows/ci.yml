@@ -60,20 +60,24 @@ jobs:
 
       - name: Docker Login (JFrog CLI)
         run: |
-          set -e
+          set -euo pipefail
           REG="${{ env.DOCKER_REGISTRY }}"
-          if jf docker login "$REG"; then
-            exit 0
+          PASSWORD="${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN || secrets.JF_DOCKER_PASSWORD || secrets.FLY_PASSWORD }}"
+          if [ -z "$PASSWORD" ]; then
+            echo "Missing Docker/JFrog credential secret." >&2
+            exit 1
           fi
 
-          USERNAME="${{ secrets.JF_DOCKER_USER || secrets.FLY_USERNAME }}"
-          PASSWORD="${{ secrets.JF_DOCKER_PASSWORD || secrets.FLY_PASSWORD }}"
-          if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
-            echo "$PASSWORD" | docker login "$REG" -u "$USERNAME" --password-stdin
-            exit 0
-          fi
+          CANDIDATES="${{ vars.JF_DOCKER_USER || '' }} ${{ vars.JF_USER || '' }} ${{ secrets.JF_DOCKER_USER || '' }} ${{ secrets.FLY_USERNAME || '' }} admin token"
+          for USERNAME in $CANDIDATES; do
+            [ -z "$USERNAME" ] && continue
+            if echo "$PASSWORD" | docker login "$REG" -u "$USERNAME" --password-stdin >/dev/null 2>&1; then
+              echo "Docker login succeeded with configured credentials."
+              exit 0
+            fi
+          done
 
-          echo "Docker login failed for $REG and no fallback username/password secrets were provided." >&2
+          echo "Docker login failed for $REG with all configured username candidates." >&2
           exit 1
 
       - name: Build image (no push)
@@ -107,20 +111,24 @@ jobs:
 
       - name: Docker Login (JFrog CLI)
         run: |
-          set -e
+          set -euo pipefail
           REG="${{ env.DOCKER_REGISTRY }}"
-          if jf docker login "$REG"; then
-            exit 0
+          PASSWORD="${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN || secrets.JF_DOCKER_PASSWORD || secrets.FLY_PASSWORD }}"
+          if [ -z "$PASSWORD" ]; then
+            echo "Missing Docker/JFrog credential secret." >&2
+            exit 1
           fi
 
-          USERNAME="${{ secrets.JF_DOCKER_USER || secrets.FLY_USERNAME }}"
-          PASSWORD="${{ secrets.JF_DOCKER_PASSWORD || secrets.FLY_PASSWORD }}"
-          if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
-            echo "$PASSWORD" | docker login "$REG" -u "$USERNAME" --password-stdin
-            exit 0
-          fi
+          CANDIDATES="${{ vars.JF_DOCKER_USER || '' }} ${{ vars.JF_USER || '' }} ${{ secrets.JF_DOCKER_USER || '' }} ${{ secrets.FLY_USERNAME || '' }} admin token"
+          for USERNAME in $CANDIDATES; do
+            [ -z "$USERNAME" ] && continue
+            if echo "$PASSWORD" | docker login "$REG" -u "$USERNAME" --password-stdin >/dev/null 2>&1; then
+              echo "Docker login succeeded with configured credentials."
+              exit 0
+            fi
+          done
 
-          echo "Docker login failed for $REG and no fallback username/password secrets were provided." >&2
+          echo "Docker login failed for $REG with all configured username candidates." >&2
           exit 1
 
       - name: Resolve image tag
