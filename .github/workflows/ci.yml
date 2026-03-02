@@ -1,0 +1,158 @@
+name: GitPulse CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment path
+        required: false
+        default: development
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      image_tag:
+        description: Optional image tag override
+        required: false
+        default: ""
+      xray_scan:
+        description: Run Xray scan
+        required: false
+        default: "Y"
+        type: choice
+        options: ["Y", "N"]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  JF_URL: ${{ vars.JF_URL || 'https://infraops.jfrog.io' }}
+  DOCKER_REGISTRY: ${{ vars.DOCKER_REGISTRY || 'infraops.jfrog.io' }}
+  IMAGE_REPO: ${{ vars.IMAGE_REPO || 'docker' }}
+  IMAGE_NAME: gitpulse
+  PROJECT_KEY: ${{ vars.JF_PROJECT_KEY || 'ci' }}
+  DOCKERFILE_PATH: Dockerfile
+  NPM_REGISTRY_URL: ${{ vars.NPM_REGISTRY_URL || 'https://registry.npmjs.org' }}
+
+jobs:
+  validate:
+    name: Validate Build (PR)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ env.JF_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}
+
+      - name: Validate required auth
+        run: |
+          if [ -z "${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}" ]; then
+            echo "Missing required secret: JF_ACCESS_TOKEN (or JFROG_ACCESS_TOKEN)." >&2
+            exit 1
+          fi
+
+      - name: Docker Login
+        run: jf docker login "${{ env.DOCKER_REGISTRY }}"
+
+      - name: Build image (no push)
+        run: |
+          PR_TAG="pr-${{ github.event.pull_request.number }}"
+          IMAGE="${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_REPO }}/development/${{ env.IMAGE_NAME }}:${PR_TAG}"
+          jf docker build \
+            --tag "${IMAGE}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --build-arg "NPM_AUTH_TOKEN=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}" \
+            --build-arg "NPM_REGISTRY_URL=${{ env.NPM_REGISTRY_URL }}" \
+            --file "${{ env.DOCKERFILE_PATH }}" \
+            .
+
+  build_push_scan:
+    name: Build, Push and Scan
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ env.JF_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}
+
+      - name: Validate required auth
+        run: |
+          if [ -z "${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}" ]; then
+            echo "Missing required secret: JF_ACCESS_TOKEN (or JFROG_ACCESS_TOKEN)." >&2
+            exit 1
+          fi
+
+      - name: Docker Login
+        run: jf docker login "${{ env.DOCKER_REGISTRY }}"
+
+      - name: Resolve image tag
+        id: meta
+        run: |
+          ENV_PATH="${{ github.event.inputs.environment || 'development' }}"
+          TAG="${{ github.event.inputs.image_tag }}"
+          if [ -z "$TAG" ]; then TAG="1.0.${{ github.run_number }}"; fi
+          FULL_IMAGE="${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_REPO }}/${ENV_PATH}/${{ env.IMAGE_NAME }}:${TAG}"
+          echo "env_path=$ENV_PATH" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "full_image=$FULL_IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Build image
+        run: |
+          jf docker build \
+            --tag "${{ steps.meta.outputs.full_image }}" \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --build-arg "NPM_AUTH_TOKEN=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}" \
+            --build-arg "NPM_REGISTRY_URL=${{ env.NPM_REGISTRY_URL }}" \
+            --file "${{ env.DOCKERFILE_PATH }}" \
+            .
+
+      - name: Push image
+        run: jf docker push "${{ steps.meta.outputs.full_image }}"
+
+      - name: Xray scan
+        if: ${{ github.event.inputs.xray_scan != 'N' }}
+        run: |
+          SCAN_JSON="$(jf docker scan "${{ steps.meta.outputs.full_image }}" --format=json 2>/dev/null || echo '{"vulnerabilities":[]}')"
+          CRITICAL="$(echo "$SCAN_JSON" | jq '[.vulnerabilities[]? | select(.severity == "Critical")] | length')"
+          HIGH="$(echo "$SCAN_JSON" | jq '[.vulnerabilities[]? | select(.severity == "High")] | length')"
+          echo "Critical=$CRITICAL High=$HIGH"
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "Xray gate failed: critical/high vulnerabilities detected." >&2
+            exit 1
+          fi
+
+      - name: Publish build info
+        if: always()
+        run: |
+          jf rt build-add-git --project "${{ env.PROJECT_KEY }}"
+          jf rt build-publish --project "${{ env.PROJECT_KEY }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## GitPulse CI Result
+          | Item | Value |
+          |---|---|
+          | Image | \`${{ steps.meta.outputs.full_image }}\` |
+          | Tag | \`${{ steps.meta.outputs.tag }}\` |
+          | Environment | \`${{ steps.meta.outputs.env_path }}\` |
+          EOF

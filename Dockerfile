@@ -1,8 +1,7 @@
-# Use public Node.js image from Docker Hub
-FROM node:18
+# Use Node 20 to satisfy package engine requirements.
+FROM node:20
 
-# Install GELF logging driver dependencies (if needed)
-# Note: Debian Bullseye (used by node:18) repositories are still active
+# Install runtime/build dependencies.
 RUN apt-get update && apt-get install -y \
     libglib2.0-dev \
     libpcre3-dev \
@@ -16,19 +15,21 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Configure npm to use JFrog Fly registry
-# Build args for npm authentication (optional, if registry requires auth)
+# npm registry/auth args (supports new token and legacy pass fallback).
+ARG NPM_REGISTRY_URL=https://registry.npmjs.org
+ARG NPM_AUTH_TOKEN
 ARG NPM_USER
 ARG NPM_PASS
-ARG NPM_EMAIL
-RUN npm config set registry https://infraops.jfrog.io/artifactory/api/npm/npm/ && \
-    if [ -n "$NPM_USER" ] && [ -n "$NPM_PASS" ]; then \
-      echo "//infraops.jfrog.io/artifactory/api/npm/npm/:_authToken=$NPM_PASS" >> /root/.npmrc && \
-      echo "//infraops.jfrog.io/artifactory/api/npm/npm/:always-auth=true" >> /root/.npmrc; \
+RUN npm config set registry "$NPM_REGISTRY_URL" && \
+    REG_HOST="$(echo "$NPM_REGISTRY_URL" | sed -E 's#^https?://##; s#/$##')" && \
+    TOKEN="${NPM_AUTH_TOKEN:-$NPM_PASS}" && \
+    if [ -n "$TOKEN" ]; then \
+      echo "//${REG_HOST}/:_authToken=${TOKEN}" >> /root/.npmrc && \
+      echo "//${REG_HOST}/:always-auth=true" >> /root/.npmrc; \
     fi
 
-# Install dependencies from Fly registry
-RUN npm install
+# Install dependencies with lockfile-first strategy.
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Copy the application code
 COPY . .
