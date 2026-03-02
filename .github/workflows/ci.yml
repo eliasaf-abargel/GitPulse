@@ -49,30 +49,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install JFrog CLI
-        run: |
-          curl -fL https://getcli.jfrog.io | sh
-          sudo mv jf /usr/local/bin/jf
-          jf --version
-
-      - name: Configure JFrog auth
-        run: |
-          set -e
-          TOKEN="${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}"
-          USERNAME="${{ secrets.JF_DOCKER_USER || secrets.FLY_USERNAME }}"
-          PASSWORD="${{ secrets.JF_DOCKER_PASSWORD || secrets.FLY_PASSWORD }}"
-
-          if [ -n "$TOKEN" ]; then
-            jf c add ci --interactive=false --overwrite=true --url "${{ env.JF_URL }}" --access-token "$TOKEN"
-          elif [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
-            jf c add ci --interactive=false --overwrite=true --url "${{ env.JF_URL }}" --user "$USERNAME" --password "$PASSWORD"
-          else
-            echo "Missing JFrog credentials. Define JF_ACCESS_TOKEN (or JFROG_ACCESS_TOKEN) or JF_DOCKER_USER/JF_DOCKER_PASSWORD (or FLY_USERNAME/FLY_PASSWORD)." >&2
-            exit 1
-          fi
-
-          jf c use ci
-          jf rt ping
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ env.JF_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}
 
       - name: Docker Login
         run: |
@@ -113,30 +94,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install JFrog CLI
-        run: |
-          curl -fL https://getcli.jfrog.io | sh
-          sudo mv jf /usr/local/bin/jf
-          jf --version
-
-      - name: Configure JFrog auth
-        run: |
-          set -e
-          TOKEN="${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}"
-          USERNAME="${{ secrets.JF_DOCKER_USER || secrets.FLY_USERNAME }}"
-          PASSWORD="${{ secrets.JF_DOCKER_PASSWORD || secrets.FLY_PASSWORD }}"
-
-          if [ -n "$TOKEN" ]; then
-            jf c add ci --interactive=false --overwrite=true --url "${{ env.JF_URL }}" --access-token "$TOKEN"
-          elif [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
-            jf c add ci --interactive=false --overwrite=true --url "${{ env.JF_URL }}" --user "$USERNAME" --password "$PASSWORD"
-          else
-            echo "Missing JFrog credentials. Define JF_ACCESS_TOKEN (or JFROG_ACCESS_TOKEN) or JF_DOCKER_USER/JF_DOCKER_PASSWORD (or FLY_USERNAME/FLY_PASSWORD)." >&2
-            exit 1
-          fi
-
-          jf c use ci
-          jf rt ping
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ env.JF_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}
 
       - name: Docker Login
         run: |
