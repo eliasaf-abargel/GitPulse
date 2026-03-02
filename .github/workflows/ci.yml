@@ -49,15 +49,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup JFrog CLI
-        id: setup-jfrog-cli
-        uses: jfrog/setup-jfrog-cli@v4
-        with:
-          oidc-provider-name: github
-          oidc-audience: jfrog-github
-        env:
-          JF_URL: ${{ env.JF_URL }}
-          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}
+      - name: Install JFrog CLI
+        run: |
+          curl -fL https://getcli.jfrog.io | sh
+          sudo mv jf /usr/local/bin/jf
+          jf --version
+
+      - name: Configure JFrog auth
+        run: |
+          set -e
+          TOKEN="${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}"
+          USERNAME="${{ secrets.JF_DOCKER_USER || secrets.FLY_USERNAME }}"
+          PASSWORD="${{ secrets.JF_DOCKER_PASSWORD || secrets.FLY_PASSWORD }}"
+
+          if [ -n "$TOKEN" ]; then
+            jf c add ci --interactive=false --overwrite=true --url "${{ env.JF_URL }}" --access-token "$TOKEN"
+          elif [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
+            jf c add ci --interactive=false --overwrite=true --url "${{ env.JF_URL }}" --user "$USERNAME" --password "$PASSWORD"
+          else
+            echo "Missing JFrog credentials. Define JF_ACCESS_TOKEN (or JFROG_ACCESS_TOKEN) or JF_DOCKER_USER/JF_DOCKER_PASSWORD (or FLY_USERNAME/FLY_PASSWORD)." >&2
+            exit 1
+          fi
+
+          jf c use ci
+          jf rt ping
 
       - name: Docker Login
         run: |
@@ -85,7 +100,7 @@ jobs:
           jf docker build \
             --tag "${IMAGE}" \
             --label "org.opencontainers.image.revision=${{ github.sha }}" \
-            --build-arg "NPM_AUTH_TOKEN=${{ steps.setup-jfrog-cli.outputs.oidc-token || secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}" \
+            --build-arg "NPM_AUTH_TOKEN=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN || secrets.FLY_PASSWORD }}" \
             --build-arg "NPM_REGISTRY_URL=${{ env.NPM_REGISTRY_URL }}" \
             --file "${{ env.DOCKERFILE_PATH }}" \
             .
@@ -98,15 +113,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup JFrog CLI
-        id: setup-jfrog-cli
-        uses: jfrog/setup-jfrog-cli@v4
-        with:
-          oidc-provider-name: github
-          oidc-audience: jfrog-github
-        env:
-          JF_URL: ${{ env.JF_URL }}
-          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}
+      - name: Install JFrog CLI
+        run: |
+          curl -fL https://getcli.jfrog.io | sh
+          sudo mv jf /usr/local/bin/jf
+          jf --version
+
+      - name: Configure JFrog auth
+        run: |
+          set -e
+          TOKEN="${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}"
+          USERNAME="${{ secrets.JF_DOCKER_USER || secrets.FLY_USERNAME }}"
+          PASSWORD="${{ secrets.JF_DOCKER_PASSWORD || secrets.FLY_PASSWORD }}"
+
+          if [ -n "$TOKEN" ]; then
+            jf c add ci --interactive=false --overwrite=true --url "${{ env.JF_URL }}" --access-token "$TOKEN"
+          elif [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
+            jf c add ci --interactive=false --overwrite=true --url "${{ env.JF_URL }}" --user "$USERNAME" --password "$PASSWORD"
+          else
+            echo "Missing JFrog credentials. Define JF_ACCESS_TOKEN (or JFROG_ACCESS_TOKEN) or JF_DOCKER_USER/JF_DOCKER_PASSWORD (or FLY_USERNAME/FLY_PASSWORD)." >&2
+            exit 1
+          fi
+
+          jf c use ci
+          jf rt ping
 
       - name: Docker Login
         run: |
@@ -145,7 +175,7 @@ jobs:
             --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
             --label "org.opencontainers.image.revision=${{ github.sha }}" \
             --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --build-arg "NPM_AUTH_TOKEN=${{ steps.setup-jfrog-cli.outputs.oidc-token || secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}" \
+            --build-arg "NPM_AUTH_TOKEN=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN || secrets.FLY_PASSWORD }}" \
             --build-arg "NPM_REGISTRY_URL=${{ env.NPM_REGISTRY_URL }}" \
             --file "${{ env.DOCKERFILE_PATH }}" \
             .
