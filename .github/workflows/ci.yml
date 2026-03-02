@@ -56,20 +56,20 @@ jobs:
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}
 
       - name: JFrog connectivity check
-        id: jf-ping
+        id: jf_ping
         continue-on-error: true
         run: jf rt ping
 
       - name: Docker Login (JFrog CLI)
-        id: jf-login
+        id: jf_login
         continue-on-error: true
         run: |
           REG="${{ env.DOCKER_REGISTRY }}"
           jf docker login "$REG"
 
       - name: Docker Login (fallback credentials)
-        id: fallback-login
-        if: steps.jf-login.outcome != 'success'
+        id: fallback_login
+        if: steps.jf_login.outcome != 'success'
         continue-on-error: true
         run: |
           set -e
@@ -87,7 +87,7 @@ jobs:
 
       - name: Validate Docker login
         run: |
-          if [ "${{ steps.jf-login.outcome }}" = "success" ] || [ "${{ steps.fallback-login.outcome }}" = "success" ]; then
+          if [ "${{ steps.jf_login.outcome }}" = "success" ] || [ "${{ steps.fallback_login.outcome }}" = "success" ]; then
             exit 0
           fi
           echo "Docker login failed. Configure JF token or docker username/password secrets." >&2
@@ -120,20 +120,20 @@ jobs:
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}
 
       - name: JFrog connectivity check
-        id: jf-ping
+        id: jf_ping
         continue-on-error: true
         run: jf rt ping
 
       - name: Docker Login (JFrog CLI)
-        id: jf-login
+        id: jf_login
         continue-on-error: true
         run: |
           REG="${{ env.DOCKER_REGISTRY }}"
           jf docker login "$REG"
 
       - name: Docker Login (fallback credentials)
-        id: fallback-login
-        if: steps.jf-login.outcome != 'success'
+        id: fallback_login
+        if: steps.jf_login.outcome != 'success'
         continue-on-error: true
         run: |
           set -e
@@ -151,7 +151,7 @@ jobs:
 
       - name: Validate Docker login
         run: |
-          if [ "${{ steps.jf-login.outcome }}" = "success" ] || [ "${{ steps.fallback-login.outcome }}" = "success" ]; then
+          if [ "${{ steps.jf_login.outcome }}" = "success" ] || [ "${{ steps.fallback_login.outcome }}" = "success" ]; then
             exit 0
           fi
           echo "Docker login failed. Configure JF token or docker username/password secrets." >&2
