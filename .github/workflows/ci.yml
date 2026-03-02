@@ -56,42 +56,13 @@ jobs:
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}
 
       - name: JFrog connectivity check
-        id: jf_ping
-        continue-on-error: true
         run: jf rt ping
 
       - name: Docker Login (JFrog CLI)
         id: jf_login
-        continue-on-error: true
         run: |
           REG="${{ env.DOCKER_REGISTRY }}"
           jf docker login "$REG"
-
-      - name: Docker Login (fallback credentials)
-        id: fallback_login
-        if: steps.jf_login.outcome != 'success'
-        continue-on-error: true
-        run: |
-          set -e
-          REG="${{ env.DOCKER_REGISTRY }}"
-          USERNAME="${{ secrets.JF_DOCKER_USER || secrets.FLY_USERNAME }}"
-          PASSWORD="${{ secrets.JF_DOCKER_PASSWORD || secrets.FLY_PASSWORD }}"
-
-          if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
-            echo "$PASSWORD" | docker login "$REG" -u "$USERNAME" --password-stdin
-            exit 0
-          fi
-
-          echo "Fallback docker credentials are missing." >&2
-          exit 1
-
-      - name: Validate Docker login
-        run: |
-          if [ "${{ steps.jf_login.outcome }}" = "success" ] || [ "${{ steps.fallback_login.outcome }}" = "success" ]; then
-            exit 0
-          fi
-          echo "Docker login failed. Configure JF token or docker username/password secrets." >&2
-          exit 1
 
       - name: Build image (no push)
         run: |
@@ -120,42 +91,13 @@ jobs:
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.JFROG_ACCESS_TOKEN }}
 
       - name: JFrog connectivity check
-        id: jf_ping
-        continue-on-error: true
         run: jf rt ping
 
       - name: Docker Login (JFrog CLI)
         id: jf_login
-        continue-on-error: true
         run: |
           REG="${{ env.DOCKER_REGISTRY }}"
           jf docker login "$REG"
-
-      - name: Docker Login (fallback credentials)
-        id: fallback_login
-        if: steps.jf_login.outcome != 'success'
-        continue-on-error: true
-        run: |
-          set -e
-          REG="${{ env.DOCKER_REGISTRY }}"
-          USERNAME="${{ secrets.JF_DOCKER_USER || secrets.FLY_USERNAME }}"
-          PASSWORD="${{ secrets.JF_DOCKER_PASSWORD || secrets.FLY_PASSWORD }}"
-
-          if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
-            echo "$PASSWORD" | docker login "$REG" -u "$USERNAME" --password-stdin
-            exit 0
-          fi
-
-          echo "Fallback docker credentials are missing." >&2
-          exit 1
-
-      - name: Validate Docker login
-        run: |
-          if [ "${{ steps.jf_login.outcome }}" = "success" ] || [ "${{ steps.fallback_login.outcome }}" = "success" ]; then
-            exit 0
-          fi
-          echo "Docker login failed. Configure JF token or docker username/password secrets." >&2
-          exit 1
 
       - name: Resolve image tag
         id: meta
