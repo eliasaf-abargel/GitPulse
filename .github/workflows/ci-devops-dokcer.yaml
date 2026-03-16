@@ -15,9 +15,8 @@ on:
         required: true
         type: choice
         options:
-          - "staging"
           - "development"
-        default: "staging"
+        default: "development"
       DOCKER_NO_CACHE:
         description: "Disable Docker layer cache"
         required: false
@@ -138,7 +137,7 @@ jobs:
     name: "Build and Push"
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.ENVIRONMENT || 'staging' }}
+    environment: ${{ github.event.inputs.ENVIRONMENT || 'development' }}
     permissions:
       contents: read
 
@@ -197,7 +196,7 @@ jobs:
       - name: "Set image tag"
         id: set-tag
         run: |
-          ENV_PATH="${{ github.event.inputs.ENVIRONMENT || 'staging' }}"
+          ENV_PATH="${{ github.event.inputs.ENVIRONMENT || 'development' }}"
           SERVICE_PATH="${{ env.IMAGE_SERVICE_PATH }}"
           SERVICE_SUFFIX=""
           if [ -n "$SERVICE_PATH" ]; then
