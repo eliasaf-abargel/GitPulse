@@ -1,0 +1,597 @@
+name: "GitPulse CI (devops/dokcer)"
+
+on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - dev
+  workflow_dispatch:
+    inputs:
+      ENVIRONMENT:
+        description: "Select environment"
+        required: true
+        type: choice
+        options:
+          - "staging"
+          - "development"
+        default: "staging"
+      DOCKER_NO_CACHE:
+        description: "Disable Docker layer cache"
+        required: false
+        type: choice
+        options: ["Y", "N"]
+        default: "N"
+      XRAY_SCAN:
+        description: "Enable JFrog Xray scan"
+        required: false
+        type: choice
+        options: ["Y", "N"]
+        default: "Y"
+      PROMOTE_TO_RELEASE:
+        description: "Force promotion to release repository"
+        required: false
+        type: choice
+        options: ["N", "Y"]
+        default: "N"
+      IMAGE_TAG:
+        description: "Custom image tag (empty = auto 1.0.RUN_NUMBER)"
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: "frogops-gitpulse-${{ github.ref }}"
+  cancel-in-progress: true
+
+env:
+  JF_URL: ${{ vars.JFROG_URL || secrets.JFROG_URL || 'https://frogops1.jfrog.io' }}
+  DOCKER_REGISTRY: ${{ vars.JFROG_DOCKER_REGISTRY || secrets.JFROG_DOCKER_REGISTRY || 'frogops1.jfrog.io' }}
+  JF_USER: ${{ vars.JF_USER || secrets.JF_USER || vars.JFROG_USER || secrets.JFROG_USER || 'token' }}
+  IMAGE_REPO: sample-docker-local
+  RELEASE_IMAGE_REPO: ${{ vars.RELEASE_IMAGE_REPO || secrets.RELEASE_IMAGE_REPO || vars.RELEASE_DOCKER_REPO || secrets.RELEASE_DOCKER_REPO || 'docker-releases-local' }}
+  IMAGE_NAME: gitpulse
+  IMAGE_SERVICE_PATH: devops/dokcer
+  XRAY_POLICY: audit-only
+  PROJECT_KEY: ${{ vars.PROJECT_KEY || secrets.PROJECT_KEY || 'sample' }}
+  DOCKERFILE_PATH: Dockerfile
+  WORKING_DIR: devops/dokcer
+  GIT_BRANCH: dev
+  WORKFLOW_TARGET: devops/dokcer
+
+jobs:
+  # ── PR validation (build only, no push) ────────────────────────────────────
+  validate:
+    name: "Validate Build (PR)"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Setup JFrog CLI"
+        uses: jfrog/setup-jfrog-cli@v4
+        id: setup-jfrog-cli
+        env:
+          JF_URL: ${{ env.JF_URL }}
+          JF_USER: ${{ env.JF_USER }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.NPM_AUTH_TOKEN || secrets.ARTIFACTORY_TOKEN }}
+          JFROG_CLI_AVOID_NEW_VERSION_WARNING: "true"
+
+      - name: "Login to JFrog Container Registry"
+        shell: bash
+        run: |
+          set -euo pipefail
+          REG="${{ env.DOCKER_REGISTRY }}"
+          if [ -z "$REG" ]; then
+            REG="${{ env.JF_URL }}"
+          fi
+          REG="${REG#https://}"
+          REG="${REG#http://}"
+          REG="${REG%%/*}"
+          if [ -z "$REG" ]; then
+            echo "DOCKER_REGISTRY is empty and could not be derived from JF_URL" >&2
+            exit 1
+          fi
+          echo "DOCKER_REGISTRY=$REG" >> $GITHUB_ENV
+          USER="${{ steps.setup-jfrog-cli.outputs.oidc-user || secrets.JF_USER || vars.JF_USER || secrets.JFROG_USER || vars.JFROG_USER || secrets.NPM_USER || vars.NPM_USER || '' }}"
+          PASS="${{ secrets.JF_ACCESS_TOKEN || secrets.NPM_AUTH_TOKEN || secrets.ARTIFACTORY_TOKEN }}"
+          if [ -z "$PASS" ]; then
+            echo "No docker login token is available." >&2
+            exit 1
+          fi
+          # Try preferred username first, then token fallback.
+          if [ -n "$USER" ] && echo "$PASS" | docker login "$REG" -u "$USER" --password-stdin; then
+            echo "docker login OK (user=$USER)"
+          elif echo "$PASS" | docker login "$REG" -u "token" --password-stdin; then
+            echo "docker login OK (fallback user=token)"
+          else
+            echo "Docker login failed. Configure JF_USER/JFROG_USER repo secret/variable to match the token owner." >&2
+            exit 1
+          fi
+
+      - name: "Build (validation only — no push)"
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          jf docker build \
+            --tag ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}/development/devops/dokcer:pr-${{ github.event.pull_request.number }} \
+            --label "org.opencontainers.image.title=${{ github.event.repository.name }}" \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "io.frogops.workflow_target=${{ env.WORKFLOW_TARGET }}" \
+            --label "io.frogops.git_branch=${{ env.GIT_BRANCH }}" \
+            --build-arg "NPM_AUTH_TOKEN=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN }}" \
+            --build-arg "NPM_PASS=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN }}" \
+            --build-arg "NPM_USER=${{ vars.NPM_USER || secrets.NPM_USER || vars.JF_USER || secrets.JF_USER || vars.JFROG_USER || secrets.JFROG_USER || 'token' }}" \
+            --build-arg "NPM_REGISTRY_URL=${{ vars.NPM_REGISTRY_URL || secrets.NPM_REGISTRY_URL }}" \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            -f ${{ env.DOCKERFILE_PATH }} \
+            .
+
+  # ── Build + Push (push to main or manual dispatch) ─────────────────────────
+  build:
+    name: "Build and Push"
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.ENVIRONMENT || 'staging' }}
+    permissions:
+      contents: read
+
+    outputs:
+      image-tag: ${{ steps.set-tag.outputs.tag }}
+      image-full: ${{ steps.set-tag.outputs.full-image }}
+      env-path: ${{ steps.set-tag.outputs.env-path }}
+      image-path: ${{ steps.set-tag.outputs.image-path }}
+      xray-passed: ${{ steps.xray-check.outputs.passed }}
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Setup JFrog CLI"
+        uses: jfrog/setup-jfrog-cli@v4
+        id: setup-jfrog-cli
+        env:
+          JF_URL: ${{ env.JF_URL }}
+          JF_USER: ${{ env.JF_USER }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.NPM_AUTH_TOKEN || secrets.ARTIFACTORY_TOKEN }}
+          JFROG_CLI_AVOID_NEW_VERSION_WARNING: "true"
+
+      - name: "Login to JFrog Container Registry"
+        shell: bash
+        run: |
+          set -euo pipefail
+          REG="${{ env.DOCKER_REGISTRY }}"
+          if [ -z "$REG" ]; then
+            REG="${{ env.JF_URL }}"
+          fi
+          REG="${REG#https://}"
+          REG="${REG#http://}"
+          REG="${REG%%/*}"
+          if [ -z "$REG" ]; then
+            echo "DOCKER_REGISTRY is empty and could not be derived from JF_URL" >&2
+            exit 1
+          fi
+          echo "DOCKER_REGISTRY=$REG" >> $GITHUB_ENV
+          USER="${{ steps.setup-jfrog-cli.outputs.oidc-user || secrets.JF_USER || vars.JF_USER || secrets.JFROG_USER || vars.JFROG_USER || secrets.NPM_USER || vars.NPM_USER || '' }}"
+          PASS="${{ secrets.JF_ACCESS_TOKEN || secrets.NPM_AUTH_TOKEN || secrets.ARTIFACTORY_TOKEN }}"
+          if [ -z "$PASS" ]; then
+            echo "No docker login token is available." >&2
+            exit 1
+          fi
+          # Try preferred username first, then token fallback.
+          if [ -n "$USER" ] && echo "$PASS" | docker login "$REG" -u "$USER" --password-stdin; then
+            echo "docker login OK (user=$USER)"
+          elif echo "$PASS" | docker login "$REG" -u "token" --password-stdin; then
+            echo "docker login OK (fallback user=token)"
+          else
+            echo "Docker login failed. Configure JF_USER/JFROG_USER repo secret/variable to match the token owner." >&2
+            exit 1
+          fi
+
+      - name: "Set image tag"
+        id: set-tag
+        run: |
+          ENV_PATH="${{ github.event.inputs.ENVIRONMENT || 'staging' }}"
+          SERVICE_PATH="${{ env.IMAGE_SERVICE_PATH }}"
+          SERVICE_SUFFIX=""
+          if [ -n "$SERVICE_PATH" ]; then
+            SERVICE_SUFFIX="/$SERVICE_PATH"
+          fi
+          TAG="${{ github.event.inputs.IMAGE_TAG }}"
+          [ -z "$TAG" ] && TAG="1.0.${{ github.run_number }}"
+
+          IMAGE_PATH="${{ env.IMAGE_NAME }}/${ENV_PATH}${SERVICE_SUFFIX}"
+          FULL_IMAGE="${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_REPO }}/${IMAGE_PATH}:${TAG}"
+
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "env-path=${ENV_PATH}" >> $GITHUB_OUTPUT
+          echo "image-path=${IMAGE_PATH}" >> $GITHUB_OUTPUT
+          echo "full-image=${FULL_IMAGE}" >> $GITHUB_OUTPUT
+
+      - name: "Build Docker image"
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          ARGS=""
+          [ "${{ github.event.inputs.DOCKER_NO_CACHE }}" = "Y" ] && ARGS="--no-cache"
+          jf docker build ${ARGS} \
+            --tag ${{ steps.set-tag.outputs.full-image }} \
+            --label "org.opencontainers.image.title=${{ github.event.repository.name }}" \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --label "io.frogops.workflow_target=${{ env.WORKFLOW_TARGET }}" \
+            --label "io.frogops.git_branch=${{ env.GIT_BRANCH }}" \
+            --build-arg "NPM_AUTH_TOKEN=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN }}" \
+            --build-arg "NPM_PASS=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN }}" \
+            --build-arg "NPM_USER=${{ vars.NPM_USER || secrets.NPM_USER || vars.JF_USER || secrets.JF_USER || vars.JFROG_USER || secrets.JFROG_USER || 'token' }}" \
+            --build-arg "NPM_REGISTRY_URL=${{ vars.NPM_REGISTRY_URL || secrets.NPM_REGISTRY_URL }}" \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            -f ${{ env.DOCKERFILE_PATH }} \
+            .
+
+      - name: "Push Docker image"
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMG="${{ steps.set-tag.outputs.full-image }}"
+          # Use native docker push to avoid noisy jf re-auth failures with reference tokens.
+          docker push "$IMG"
+
+      - name: "Verify image exists in Artifactory"
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMG_PATH="${{ steps.set-tag.outputs.image-path }}"
+          TAG="${{ steps.set-tag.outputs.tag }}"
+          jf rt curl -sS -XGET "/api/docker/${{ env.IMAGE_REPO }}/v2/${IMG_PATH}/manifests/${TAG}" \
+            -H "Accept: application/vnd.docker.distribution.manifest.v2+json" >/dev/null
+
+      - name: "Xray security scan"
+        id: xray-scan
+        if: github.event.inputs.XRAY_SCAN != 'N'
+        run: |
+          set +e
+          FULL_IMAGE="${{ steps.set-tag.outputs.full-image }}"
+          SCAN_TIMEOUT_SECONDS="${XRAY_SCAN_TIMEOUT_SECONDS:-480}"
+          timeout "${SCAN_TIMEOUT_SECONDS}" jf docker scan "$FULL_IMAGE" --format=json > xray-scan.json 2> xray-scan.stderr
+          SCAN_EXIT=$?
+          if [ "$SCAN_EXIT" -eq 124 ]; then
+            echo "Xray scan timed out after ${SCAN_TIMEOUT_SECONDS}s for $FULL_IMAGE" >> xray-scan.stderr
+          fi
+          if [ -s xray-scan.json ]; then
+            cp xray-scan.json xray-raw.json
+          else
+            cat xray-scan.stderr > xray-raw.json
+          fi
+          export XRAY_SCAN_EXIT="$SCAN_EXIT"
+          export XRAY_FULL_IMAGE="$FULL_IMAGE"
+          export XRAY_REPO="${{ env.IMAGE_REPO }}"
+          export XRAY_IMAGE_PATH="${{ steps.set-tag.outputs.image-path }}"
+          export XRAY_ENV_PATH="${{ steps.set-tag.outputs.env-path }}"
+          export XRAY_IMAGE_NAME="${{ env.IMAGE_NAME }}"
+          export XRAY_SERVICE_PATH="${{ env.IMAGE_SERVICE_PATH }}"
+          export XRAY_TAG="${{ steps.set-tag.outputs.tag }}"
+          export XRAY_BASE_URL="${{ env.JF_URL }}"
+          node <<'NODE'
+          const fs = require("fs");
+
+          const raw = fs.existsSync("xray-raw.json")
+            ? String(fs.readFileSync("xray-raw.json", "utf8") || "")
+            : "";
+          const scanExit = Number(process.env.XRAY_SCAN_EXIT || 0);
+          const parseMaybeJson = (text) => {
+            const candidates = [];
+            const direct = String(text || "").trim();
+            if (direct) candidates.push(direct);
+
+            const firstObj = direct.indexOf("{");
+            const lastObj = direct.lastIndexOf("}");
+            if (firstObj >= 0 && lastObj > firstObj) {
+              candidates.push(direct.slice(firstObj, lastObj + 1));
+            }
+
+            const firstArr = direct.indexOf("[");
+            const lastArr = direct.lastIndexOf("]");
+            if (firstArr >= 0 && lastArr > firstArr) {
+              candidates.push(direct.slice(firstArr, lastArr + 1));
+            }
+
+            for (const candidate of candidates) {
+              try {
+                return JSON.parse(candidate);
+              } catch {
+                // try next candidate
+              }
+            }
+            return null;
+          };
+
+          const parsedFromJson = parseMaybeJson(raw);
+          const parsed = parsedFromJson || { rawOutput: raw };
+
+          const counts = { critical: 0, high: 0, medium: 0, low: 0, warning: 0 };
+          const visited = new WeakSet();
+          const inc = (sevRaw) => {
+            const sev = String(sevRaw || "").trim().toLowerCase();
+            if (!sev) return;
+            if (sev === "critical") counts.critical += 1;
+            else if (sev === "high") counts.high += 1;
+            else if (sev === "medium") counts.medium += 1;
+            else if (sev === "low") counts.low += 1;
+            else if (sev === "warning" || sev === "warn") counts.warning += 1;
+          };
+          const walk = (node) => {
+            if (!node) return;
+            if (Array.isArray(node)) {
+              for (const item of node) walk(item);
+              return;
+            }
+            if (typeof node !== "object") return;
+            if (visited.has(node)) return;
+            visited.add(node);
+            if (Object.prototype.hasOwnProperty.call(node, "severity")) inc(node.severity);
+            for (const value of Object.values(node)) walk(value);
+          };
+          walk(parsed);
+
+          // Fallback for non-JSON/partially mixed scanner output.
+          if (!parsedFromJson && raw) {
+            const countBy = (pattern) => {
+              const matches = raw.match(pattern);
+              return Array.isArray(matches) ? matches.length : 0;
+            };
+            counts.critical = Math.max(counts.critical, countBy(/"severity"\s*:\s*"critical"/gi));
+            counts.high = Math.max(counts.high, countBy(/"severity"\s*:\s*"high"/gi));
+            counts.medium = Math.max(counts.medium, countBy(/"severity"\s*:\s*"medium"/gi));
+            counts.low = Math.max(counts.low, countBy(/"severity"\s*:\s*"low"/gi));
+            counts.warning = Math.max(counts.warning, countBy(/"severity"\s*:\s*"(warning|warn)"/gi));
+          }
+
+          const repo = String(process.env.XRAY_REPO || "").trim();
+          const imagePath = String(process.env.XRAY_IMAGE_PATH || "").trim();
+          const envPath = String(process.env.XRAY_ENV_PATH || "").trim();
+          const imageName = String(process.env.XRAY_IMAGE_NAME || "").trim();
+          const tag = String(process.env.XRAY_TAG || "").trim();
+          const baseUrl = String(process.env.XRAY_BASE_URL || "").trim().replace(/\/$/, "");
+          const reportUrl = baseUrl && repo && imagePath && tag
+            ? (
+                baseUrl +
+                "/ui/scans-list/" +
+                encodeURIComponent(repo) +
+                "/" +
+                encodeURIComponent(imagePath) +
+                "/" +
+                encodeURIComponent(tag)
+              ).replace(/%2F/g, "/")
+            : "";
+
+          const summary = {
+            critical: counts.critical,
+            high: counts.high,
+            warning: counts.medium + counts.low + counts.warning,
+            medium: counts.medium,
+            low: counts.low,
+            passed: counts.critical === 0 && counts.high === 0,
+            scanExit,
+            reportUrl,
+            image: String(process.env.XRAY_FULL_IMAGE || "").trim() || null,
+            repo: repo || null,
+            imagePath: imagePath || null,
+            envPath: envPath || null,
+            imageName: imageName || null,
+            tag: tag || null,
+          };
+          fs.writeFileSync("xray-results.json", JSON.stringify({ summary, raw: parsed }, null, 2));
+
+          const ghOut = String(process.env.GITHUB_OUTPUT || "").trim();
+          if (ghOut) {
+            fs.appendFileSync(ghOut, "critical=" + String(summary.critical) + "\n");
+            fs.appendFileSync(ghOut, "high=" + String(summary.high) + "\n");
+            fs.appendFileSync(ghOut, "warning=" + String(summary.warning) + "\n");
+            fs.appendFileSync(ghOut, "has_critical=" + String(summary.critical > 0) + "\n");
+            fs.appendFileSync(ghOut, "has_high=" + String(summary.high > 0) + "\n");
+            fs.appendFileSync(ghOut, "report_url=" + String(summary.reportUrl || "") + "\n");
+            fs.appendFileSync(ghOut, "passed=" + String(summary.passed) + "\n");
+            fs.appendFileSync(ghOut, "scan_exit=" + String(summary.scanExit) + "\n");
+          }
+          NODE
+          exit 0
+
+      - name: "Xray gate"
+        id: xray-check
+        run: |
+          SCAN_EXIT="${{ steps.xray-scan.outputs.scan_exit || '0' }}"
+          CRITICAL="${{ steps.xray-scan.outputs.critical || '0' }}"
+          HIGH="${{ steps.xray-scan.outputs.high || '0' }}"
+          WARNING="${{ steps.xray-scan.outputs.warning || '0' }}"
+          XRAY_POLICY="${{ env.XRAY_POLICY }}"
+
+          echo "policy=${XRAY_POLICY}" >> $GITHUB_OUTPUT
+
+          if [ "${{ github.event.inputs.XRAY_SCAN }}" = "N" ]; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo "gate_reason=scan-disabled" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if [ "$XRAY_POLICY" = "audit-only" ]; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+            if [ "$SCAN_EXIT" != "0" ] && [ "$SCAN_EXIT" != "3" ]; then
+              echo "gate_reason=audit-only-scan-warning" >> $GITHUB_OUTPUT
+              echo "::warning::Xray scan completed with advisory exit ${SCAN_EXIT}. Review the uploaded scan artifact."
+            elif [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ] || [ "$WARNING" -gt 0 ]; then
+              echo "gate_reason=audit-only-findings" >> $GITHUB_OUTPUT
+              echo "::warning::Xray findings recorded (critical=${CRITICAL}, high=${HIGH}, warning=${WARNING}). Advisory mode keeps CI green."
+            else
+              echo "gate_reason=audit-only-clean" >> $GITHUB_OUTPUT
+            fi
+            exit 0
+          fi
+
+          if [ "$SCAN_EXIT" != "0" ] && [ "$SCAN_EXIT" != "3" ]; then
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "gate_reason=scan-error" >> $GITHUB_OUTPUT
+            echo "Xray scan command did not complete successfully (exit ${SCAN_EXIT})" >&2
+            exit 1
+          fi
+
+          if [ "$XRAY_POLICY" = "block-critical" ]; then
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "passed=false" >> $GITHUB_OUTPUT
+              echo "gate_reason=critical-findings" >> $GITHUB_OUTPUT
+              echo "Xray: critical vulnerabilities found — blocking release" >&2
+              exit 1
+            fi
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo "gate_reason=critical-threshold-clear" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "gate_reason=high-threshold-findings" >> $GITHUB_OUTPUT
+            echo "Xray: critical or high vulnerabilities found — blocking release" >&2
+            exit 1
+          fi
+
+          echo "passed=true" >> $GITHUB_OUTPUT
+          echo "gate_reason=high-threshold-clear" >> $GITHUB_OUTPUT
+
+      - name: "Upload Xray results"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray-results-${{ github.run_number }}
+          path: xray-results.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: "Publish build info"
+        if: always()
+        run: |
+          if [ -n "${{ env.PROJECT_KEY }}" ]; then
+            jf rt build-add-git --project ${{ env.PROJECT_KEY }}
+            jf rt build-publish  --project ${{ env.PROJECT_KEY }}
+          else
+            jf rt build-add-git
+            jf rt build-publish
+          fi
+
+      - name: "Build summary"
+        if: always()
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY <<'EOF'
+          ## Docker Build
+          | | |
+          |--|--|
+          | Image | ${{ steps.set-tag.outputs.full-image }} |
+          | Tag | ${{ steps.set-tag.outputs.tag }} |
+          | Environment | ${{ steps.set-tag.outputs.env-path }} |
+          | Xray Policy | ${{ env.XRAY_POLICY }} |
+          | Xray | ${{ steps.xray-check.outputs.passed == 'true' && 'Passed' || 'Failed' }} |
+          | Xray Counts | critical=${{ steps.xray-scan.outputs.critical || '0' }}, high=${{ steps.xray-scan.outputs.high || '0' }}, warning=${{ steps.xray-scan.outputs.warning || '0' }} |
+          | Xray Report | ${{ steps.xray-scan.outputs.report_url || 'n/a' }} |
+          EOF
+
+  # ── Release (only if Xray passed) ─────────────────────────────────────────
+  release:
+    name: "Promote to Release"
+    needs: build
+    if: needs.build.outputs.xray-passed == 'true' && (needs.build.outputs.env-path == 'production' || github.event.inputs.PROMOTE_TO_RELEASE == 'Y')
+    runs-on: ubuntu-latest
+    environment: ${{ needs.build.outputs.env-path }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Setup JFrog CLI"
+        uses: jfrog/setup-jfrog-cli@v4
+        id: setup-jfrog-cli
+        env:
+          JF_URL: ${{ env.JF_URL }}
+          JF_USER: ${{ env.JF_USER }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN || secrets.NPM_AUTH_TOKEN || secrets.ARTIFACTORY_TOKEN }}
+          JFROG_CLI_AVOID_NEW_VERSION_WARNING: "true"
+
+      - name: "Login to JFrog Container Registry"
+        shell: bash
+        run: |
+          set -euo pipefail
+          REG="${{ env.DOCKER_REGISTRY }}"
+          if [ -z "$REG" ]; then
+            REG="${{ env.JF_URL }}"
+          fi
+          REG="${REG#https://}"
+          REG="${REG#http://}"
+          REG="${REG%%/*}"
+          if [ -z "$REG" ]; then
+            echo "DOCKER_REGISTRY is empty and could not be derived from JF_URL" >&2
+            exit 1
+          fi
+          echo "DOCKER_REGISTRY=$REG" >> $GITHUB_ENV
+          USER="${{ steps.setup-jfrog-cli.outputs.oidc-user || secrets.JF_USER || vars.JF_USER || secrets.JFROG_USER || vars.JFROG_USER || secrets.NPM_USER || vars.NPM_USER || '' }}"
+          PASS="${{ secrets.JF_ACCESS_TOKEN || secrets.NPM_AUTH_TOKEN || secrets.ARTIFACTORY_TOKEN }}"
+          if [ -z "$PASS" ]; then
+            echo "No docker login token is available." >&2
+            exit 1
+          fi
+          # Try preferred username first, then token fallback.
+          if [ -n "$USER" ] && echo "$PASS" | docker login "$REG" -u "$USER" --password-stdin; then
+            echo "docker login OK (user=$USER)"
+          elif echo "$PASS" | docker login "$REG" -u "token" --password-stdin; then
+            echo "docker login OK (fallback user=token)"
+          else
+            echo "Docker login failed. Configure JF_USER/JFROG_USER repo secret/variable to match the token owner." >&2
+            exit 1
+          fi
+
+      - name: "Promote image to release repo"
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.build.outputs.image-tag }}"
+          ENV_PATH="${{ needs.build.outputs.env-path }}"
+          IMAGE_PATH="${{ needs.build.outputs.image-path }}"
+          TARGET_REPO="${{ env.RELEASE_IMAGE_REPO }}"
+          if [ -z "$TARGET_REPO" ]; then
+            TARGET_REPO="docker-releases-local"
+          fi
+          REPO_JSON="$(jf rt curl -sS -XGET "/api/repositories/$TARGET_REPO" || true)"
+          if [ -z "$REPO_JSON" ]; then
+            echo "Release repository '$TARGET_REPO' not found in Artifactory. Skipping release promotion."
+            exit 0
+          fi
+          PKG_TYPE="$(echo "$REPO_JSON" | sed -n 's/.*"packageType"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)"
+          if [ -n "$PKG_TYPE" ] && [ "$PKG_TYPE" != "docker" ]; then
+            echo "Release repository '$TARGET_REPO' has packageType='$PKG_TYPE' (requires docker). Skipping release promotion."
+            exit 0
+          fi
+          set +e
+          PROMOTE_OUT="$(jf rt docker-promote \
+            "${IMAGE_PATH}" \
+            "${{ env.IMAGE_REPO }}" \
+            "${TARGET_REPO}" \
+            --source-tag="${TAG}" \
+            --target-docker-image="${IMAGE_PATH}" \
+            --target-tag="${TAG}" \
+            --copy=true 2>&1)"
+          PROMOTE_RC=$?
+          set -e
+          if [ $PROMOTE_RC -ne 0 ]; then
+            if echo "$PROMOTE_OUT" | grep -qi "Unsupported V2 repository request"; then
+              echo "Release repository '$TARGET_REPO' does not support Docker V2 promotion. Skipping release promotion."
+              exit 0
+            fi
+            echo "$PROMOTE_OUT" >&2
+            exit $PROMOTE_RC
+          fi
+          echo "$PROMOTE_OUT"
