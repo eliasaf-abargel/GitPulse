@@ -46,15 +46,15 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  JF_URL: ${{ vars.JFROG_URL || secrets.JFROG_URL || 'https://frogops1.jfrog.io' }}
-  DOCKER_REGISTRY: ${{ vars.JFROG_DOCKER_REGISTRY || secrets.JFROG_DOCKER_REGISTRY || 'frogops1.jfrog.io' }}
+  JF_URL: ${{ vars.JFROG_URL || secrets.JFROG_URL || 'https://jfrogbi.jfrog.io' }}
+  DOCKER_REGISTRY: ${{ vars.JFROG_DOCKER_REGISTRY || secrets.JFROG_DOCKER_REGISTRY || 'jfrogbi.jfrog.io' }}
   JF_USER: ${{ vars.JF_USER || secrets.JF_USER || vars.JFROG_USER || secrets.JFROG_USER || 'token' }}
-  IMAGE_REPO: sample-docker-local
+  IMAGE_REPO: docker-local
   RELEASE_IMAGE_REPO: ${{ vars.RELEASE_IMAGE_REPO || secrets.RELEASE_IMAGE_REPO || vars.RELEASE_DOCKER_REPO || secrets.RELEASE_DOCKER_REPO || 'docker-releases-local' }}
   IMAGE_NAME: gitpulse
   IMAGE_SERVICE_PATH: 
   XRAY_POLICY: audit-only
-  PROJECT_KEY: ${{ vars.PROJECT_KEY || secrets.PROJECT_KEY || 'sample' }}
+  PROJECT_KEY: ${{ vars.PROJECT_KEY || secrets.PROJECT_KEY || 'jfrogbi' }}
   DOCKERFILE_PATH: Dockerfile
   WORKING_DIR: .
   GIT_BRANCH: dev
@@ -128,6 +128,16 @@ jobs:
             --build-arg "NPM_PASS=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN }}" \
             --build-arg "NPM_USER=${{ vars.NPM_USER || secrets.NPM_USER || vars.JF_USER || secrets.JF_USER || vars.JFROG_USER || secrets.JFROG_USER || 'token' }}" \
             --build-arg "NPM_REGISTRY_URL=${{ vars.NPM_REGISTRY_URL || secrets.NPM_REGISTRY_URL }}" \
+            --build-arg "PIP_INDEX_URL=${{ vars.PIP_INDEX_URL || secrets.PIP_INDEX_URL }}" \
+            --build-arg "PIP_EXTRA_INDEX_URL=${{ vars.PIP_EXTRA_INDEX_URL || secrets.PIP_EXTRA_INDEX_URL }}" \
+            --build-arg "POETRY_HTTP_BASIC_JFROG_USERNAME=${{ vars.JF_USER || secrets.JF_USER || vars.JFROG_USER || secrets.JFROG_USER || 'token' }}" \
+            --build-arg "POETRY_HTTP_BASIC_JFROG_PASSWORD=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN }}" \
+            --build-arg "GOPROXY=${{ vars.GOPROXY || secrets.GOPROXY }}" \
+            --build-arg "GONOSUMCHECK=${{ vars.GONOSUMCHECK || '*' }}" \
+            --build-arg "GONOSUMDB=${{ vars.GONOSUMDB || '*' }}" \
+            --build-arg "MVN_SETTINGS_SERVER_USERNAME=${{ vars.JF_USER || secrets.JF_USER || vars.JFROG_USER || secrets.JFROG_USER || 'token' }}" \
+            --build-arg "MVN_SETTINGS_SERVER_PASSWORD=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN }}" \
+            --build-arg "ARTIFACTORY_URL=${{ vars.JFROG_URL || secrets.JFROG_URL }}" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             -f ${{ env.DOCKERFILE_PATH }} \
             .
@@ -230,6 +240,16 @@ jobs:
             --build-arg "NPM_PASS=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN }}" \
             --build-arg "NPM_USER=${{ vars.NPM_USER || secrets.NPM_USER || vars.JF_USER || secrets.JF_USER || vars.JFROG_USER || secrets.JFROG_USER || 'token' }}" \
             --build-arg "NPM_REGISTRY_URL=${{ vars.NPM_REGISTRY_URL || secrets.NPM_REGISTRY_URL }}" \
+            --build-arg "PIP_INDEX_URL=${{ vars.PIP_INDEX_URL || secrets.PIP_INDEX_URL }}" \
+            --build-arg "PIP_EXTRA_INDEX_URL=${{ vars.PIP_EXTRA_INDEX_URL || secrets.PIP_EXTRA_INDEX_URL }}" \
+            --build-arg "POETRY_HTTP_BASIC_JFROG_USERNAME=${{ vars.JF_USER || secrets.JF_USER || vars.JFROG_USER || secrets.JFROG_USER || 'token' }}" \
+            --build-arg "POETRY_HTTP_BASIC_JFROG_PASSWORD=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN }}" \
+            --build-arg "GOPROXY=${{ vars.GOPROXY || secrets.GOPROXY }}" \
+            --build-arg "GONOSUMCHECK=${{ vars.GONOSUMCHECK || '*' }}" \
+            --build-arg "GONOSUMDB=${{ vars.GONOSUMDB || '*' }}" \
+            --build-arg "MVN_SETTINGS_SERVER_USERNAME=${{ vars.JF_USER || secrets.JF_USER || vars.JFROG_USER || secrets.JFROG_USER || 'token' }}" \
+            --build-arg "MVN_SETTINGS_SERVER_PASSWORD=${{ secrets.NPM_AUTH_TOKEN || secrets.JF_ACCESS_TOKEN }}" \
+            --build-arg "ARTIFACTORY_URL=${{ vars.JFROG_URL || secrets.JFROG_URL }}" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             -f ${{ env.DOCKERFILE_PATH }} \
             .
